@@ -2,3 +2,6 @@
 *.Rhistory
 *.RData
 *.Rproj.user/
+
+# Other files
+.DS_Store
