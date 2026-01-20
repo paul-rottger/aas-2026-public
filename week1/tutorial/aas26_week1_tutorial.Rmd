@@ -1,0 +1,656 @@
+---
+title: "Week 1 Tutorial"
+subtitle: "Applied Analytical Statistics 2025/26"
+authors: Paul Röttger and Mikhail Korneev
+output:
+  html_document:
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Describing Data 
+
+### Data Collection
+
+Below is a series of research questions paired with datasets.
+
+1. **RQ**: Do AI chat assistants provide higher-quality answers to factual questions than expert humans?<br>**Data**: A benchmark dataset of 1,000 short factual questions in English, with one AI-generated answer and one expert human answer per question, rated for quality by crowdworkers.
+2. **RQ**: How does the prevalence of hate speech on social media differ across languages?<br>**Data**: A dataset of Twitter posts in English, Spanish, and German, collected in 2022, with annotations for whether each post contains hate speech.
+3. **RQ**: What is the average daily usage time of AI chat assistants among UK adults?<br>**Data**: A survey dataset collected in December 2024 from a representative sample of 10,000 UK adults, including self-reported daily usage time of AI chat assistants in minutes.
+
+For each pair, discuss **ecological validity**. What are the limitations of the specific data relative to the population of interest in the research question?
+
+```
+1. 
+2. 
+3. 
+```
+
+Next, discuss **construct validity**. To what extent do the measurements in the dataset accurately capture the theoretical constructs in the research question?
+
+```
+1. 
+2. 
+3. 
+```
+
+### Descriptive Statistics
+
+In this section, we will practice calculating and interpreting descriptive statistics for both continuous and categorical variables.
+
+We will be working with a subset of data from a real unpublished study that measured how people perceive political opinion content written by a representative sample of UK adults.
+
+First, we load the data set from the course GitHub using the `readr` package.
+```{r, message = FALSE, warning = FALSE}
+# Step 1: Install required package (run once if not already installed)
+# install.packages("readr")
+
+# Step 2: Load the package
+library(readr)
+
+# Step 3: Read the data set from the URL into R
+df <- read_csv(
+  "https://raw.githubusercontent.com/paul-rottger/aas-2026-public/refs/heads/main/week1/tutorial/week1_tutorial_sample.csv"
+)
+
+# Step 4 (alternative): 
+# If the file is saved locally on your computer, use: 
+# df <- read_csv("week1_tutorial_sample.csv")
+```
+
+Since this is the first tutorial, we will spend some time covering basic data processing and inspection in R.
+
+```{r, message = FALSE} 
+
+# Step 1: Inspect the dataset
+# View the first 10 rows of the dataset
+head(df, 10)
+
+# View the last 10 rows of the dataset
+tail(df, 10)
+
+# We can use a $ sign to select specific columns
+tail(df$proposition, 5)
+
+# Step 2: Getting help in R
+# Get detailed help for a specific function
+help(head)
+
+```
+
+What is the **unit of observation** in this dataset? In other words, what does each row represent?
+
+```
+
+Provide your answer here. 
+
+```
+
+**Practice:** 
+
+(a) Are there any **missing values** in the dataset? Use sum() together with a logical condition to count the number of NA values.
+**Hint:** `is.na()` returns TRUE for missing values and FALSE otherwise. We can combine two functions as `function_1(function_2(x))`
+
+```{r}
+
+# Count the total number of missing values in the data set
+# sum(____)
+
+```
+
+(b) How many writers are there in our dataset, and how many paragraphs did each writer contribute?
+**Hint:** `unique()` returns the unique values of a variable; `length()` counts how many values are in a vector.
+
+```{r, message = FALSE, warning = FALSE}
+# Step 1: Count the total number of writers
+# length(____)
+
+# Step 2: Number of paragraphs contributed by each writer
+#aggregate(
+#  ____ ~ ____,
+#  data = df,
+#  FUN = function(x) _____  # FUN specifies the function that is applied to each group created by aggregate()
+#)
+
+# Step 2 (alternative with dplyr):
+# Number of paragraphs per writer
+
+# Install required package (run once if not already installed)
+#install.packages("dplyr")
+
+# Load the library
+library(dplyr)
+
+# Number of paragraphs contributed by each writer with dplyr
+#df %>%
+#  group_by(____) %>%
+#  summarise(n_paragraphs = ____)
+
+```
+
+#### Summary Statistics for Continuous Variables
+
+Let's start by exploring some continuous variables in the data set.
+For now, we will focus on the `writer_knowledge`.
+
+These variable measures raters' assessments of the writer's stance on the proposition. 
+
+Inspect the values that the `writer_knowledge` variable takes.
+What scale is the variable measured on and how should we interpret the values?
+
+```{r}
+# Look at summary statistics for the three variables
+summary(df$writer_knowledge)
+```
+
+```
+Provide your answer here.
+
+```
+**Practice:**
+
+Now write a code that calculates the following **summary statistics** for a specified variable: mean, median, range, interquartile range (IQR), and standard deviation.
+
+```{r}
+# Summary statistics for writer_knowledge
+#df %>%
+#  select(____) %>%
+#  summarise(
+#    mean   = mean(____),
+#    median = ____,
+#    min    = ____,
+#    max    = ____,
+#    IQR    = ____,
+#    sd     = ____
+#  )
+```
+
+What claims can we make about the **central tendency** and **spread** of the `writer_knowledge` variable based on the summary statistics you calculated above?
+
+```
+
+Provide your answer here.
+
+```
+
+Based on just the means and medians, what can we say about the shape of the distribution of the `writer_knowledge` variable?
+
+```
+
+Provide your answer here.
+
+```
+
+#### Visualising Continuous Variables
+
+Summary statistics compress information and can sometimes be misleading.
+Visualisations help us get a better sense of the distribution of the data.
+
+In this course, we will be using the `ggplot2` package for data visualisation.
+Before we start plotting, let's quickly review the basic structure of a `ggplot2` command.
+
+```{r, message = FALSE, warning = FALSE}
+# Install required package (run once if not already installed)
+#install.packages("ggplot2")
+
+# Load the library
+library(ggplot2)
+
+# Basic structure of a ggplot2 command:
+# ggplot(data = <dataframe>, aes(x = <x-variable>, y = <y-variable>)) +
+#   <geom_function>()
+
+# Example: a simple histogram
+ggplot(data = df, aes(x = writer_knowledge)) +
+  geom_histogram()
+
+# Histogram of writer_knowledge with annotations
+ggplot(data = df, aes(x = writer_knowledge)) +
+  geom_histogram(bins = 100) +
+  labs(
+    title = "Distribution of Writer Knowledge",
+    subtitle = "Rater assessments of writers’ knowledge on the proposition (0–100 scale)",
+    x = "Perceived Writer Knowledge",
+    y = "Number of observations",
+    caption = "Each bar represents the number of rater–paragraph observations in a score range"
+  ) +
+  scale_x_continuous(breaks = seq(0, 100, 10)) +
+  theme_minimal()
+
+```
+
+Compared to the summary statistics, what additional insights does the histogram provide about the distribution of the `writer_knowledge` variable?
+
+```
+Provide your answer here.
+
+```
+
+#### Summary Statistics for Categorical Variables
+
+In the study, raters were also asked to guess the socio-demographic attributes of the writer of each paragraph.
+Let's focus one of these variables: `writer_politicalIdeology`.
+This variable measures raters' assessment of the writer's political ideology. 
+
+First, inspect the values that these variables take.
+
+```{r}
+
+# Inspect the unique values for each variable
+unique(df$writer_politicalIdeology)
+
+```
+
+Is `writer_politicalIdeology` ordinal or nominal?
+
+```
+Provide your answer here.
+
+```
+
+**Practice:** calculate the frequency and relative frequency for each category and list them in a table.
+Write a function to do this and then apply it to each of the three variables.
+
+```{r}
+# Define a function to calculate frequency and relative frequency
+#____ <- function(x) {
+#  tbl <- table(x)
+#  data.frame(
+#    category = names(tbl),
+#    frequency = as.numeric(tbl),
+#    relative_frequency = as.numeric(tbl) / sum(tbl)
+#  )
+#}
+
+# Political ideology table
+#____(_____)
+```
+
+#### Visualising Categorical Variables
+
+Now visualise the distribution of the `writer_politicalIdeology` variable using bar plots.
+The x-axis should represent the categories and the y-axis the proportion of observations in each category.
+
+```{r}
+
+# Bar plot: writer_politicalIdeology 
+# For the writer_politicalIdeology variable, we need to manually order the categories. 
+df <- df %>%
+  mutate(writer_politicalIdeology = factor(
+      writer_politicalIdeology,
+      levels = c(
+        "Very Left-Wing",
+        "Moderately Left-Wing",
+        "Centrist",
+        "Moderately Right-Wing",
+        "Very Right-Wing",
+        "Other"
+      ),
+      ordered = FALSE
+    )
+  )
+
+#ggplot(df, aes(x = ____)) +
+#  ____(aes(y = after_stat(prop), group = 1)) +
+#  labs(
+#    title = "____",
+#    x = "____",
+#    y = "____"
+#  ) +
+#  theme_minimal()
+
+```
+
+Write a brief description of the distribution of the `writer_politicalIdeology` variable based on the frequency tables and bar plots.
+
+```
+Provide your answer here. 
+
+```
+
+#### Exploring Association Between Categorical Variables
+
+We know that voting patterns often vary by age (e.g. in the [UK 2024 General Election](https://yougov.co.uk/politics/articles/49978-how-britain-voted-in-the-2024-general-election)).
+Let's explore whether there is an association between perceived writer age and perceived writer political ideology in our dataset.
+
+The dataset contains a variable `writer_age` that records the rater-perceived age of the writer of each paragraph. To prepare for the analysis, create a new variable age_binned that groups the writer_age variable into the following bins: "18-29", "30-39", "40-49", "50-59", "60-69", "70+".
+**Hint:** in `dplyr`, you can add new columns with `mutate()` function. Conditions can be added with `case_when()`.
+
+```{r}
+
+# Type your code here
+
+```
+
+Create a **contingency table** showing the counts of observations for each combination of `writer_age_binned` and `writer_politicalIdeology`.
+**Hint:** `table()` cross-tabulates two categorical variables
+
+```{r}
+
+# Type your code here
+
+```
+
+For easier interpretation, convert the counts in the contingency table to proportions within each category of `writer_age_binned`.
+**Hint:** proportions within groups are calculated by dividing by `sum(n)`. 
+
+```{r}
+
+# Type your code here
+
+```
+
+Based on these tables, describe what patterns you observe in the association between perceived writer age and perceived writer political ideology.
+
+```
+Provide your answer here. 
+
+```
+
+#### Exploring Association Between Continuous Variables
+
+Next, let's explore the association between two continuous variables: `writer_confidence` and `writer_knowledge`.
+As a reminder, these variables measure raters' assessments of the writer's confidence in their opinion and knowledge about the topic, respectively.
+Use `ggplot2` to create a **scatterplot** with `writer_confidence` on the x-axis and `writer_knowledge` on the y-axis.
+**Hint:** `ggplot2` function for scatterplot it `geom_point()`. 
+
+```{r, message=FALSE, warning=FALSE}
+
+# Type your code here
+
+```
+
+How would you describe the relationship between these two variables based on the scatterplot?
+
+```
+Provide your answer here. 
+
+```
+
+In the lecture, we learned about the **Pearson correlation coefficient** as a measure of linear association between two continuous variables.
+Calculate the Pearson correlation coefficient between writer_confidence and writer_knowledge.
+**Hint:** `cor()` defaults to Pearson correlation. 
+
+```{r}
+
+# Type your code here
+
+```
+
+Now calculate the **Spearman rank correlation coefficient** between writer_confidence and writer_knowledge.
+**Hint:** change the method value using the `cor()` function. 
+
+```{r}
+
+# Type your code here
+
+```
+
+Comment on which correlation coefficient is a more appropriate measure of association for these two variables, given the scatterplot you created earlier.
+
+```
+Provide your answer here. 
+
+```
+
+For exploratory analysis, it is often useful to describe the correlation between all possible pairs of variables in a **correlation matrix**.
+Using the R function `cor()`, which defaults to Pearson correlation, create a correlation matrix for all continuous variables in the dataset.
+**Hint:** `select()` helps restrict the matrix to numeric variables. 
+
+```{r}
+
+# Type your code here
+
+```
+
+Visualise the correlation matrix using a heatmap. Comment on any interesting patterns you observe in the correlation matrix.
+For example, are there any pairs of variables that show particularly strong positive or negative correlations?
+
+**Hint:** convert correlation matrix to long format and use the new data frame in `ggplot()`. 
+
+```{r}
+
+# Type your code here
+
+```
+
+Pick two variables that have a particularly strong correlation.
+At this stage, what can we conclude about the relationship between these two variables?
+
+```
+Provide your answer here. 
+
+```
+
+#### Inter-Rater Reliability
+
+We noted earlier that each paragraph in our dataset was rated by multiple participants.
+In such cases, we can compute measures of **inter-rater reliability** (IRR) to quantify how consistent the ratings are across different raters.
+Which measure to use depends on the type of data we have (e.g. continuous vs. categorical), the number of raters, and whether all raters rated all items.
+
+How many raters are there, and, on average, how many paragraphs did each rater evaluate?
+**Hint:** group by rater, then count rows. 
+
+```{r}
+
+# Type your code here
+
+```
+
+How many ratings, on average, did each paragraph receive?
+**Hint:** group by paragraph, then count rows. 
+
+```{r}
+
+# Type your code here
+
+```
+
+Now that we have an idea of the data structure, let's look at IRR for two of our continuous variables: `writer_confidence` and `paragraph_originality`.
+These variables measure raters' assessments of the writer's confidence in their opinion and the originality of arguments in the paragraph, respectively.
+
+As a simple measure of IRR for continuous variables, we can look at the variability of ratings for each paragraph.
+For each variable, calculate the mean of the paragraph-level standard deviations of ratings across all paragraphs.
+**Hint:** first group by paragraph, then summarise variability
+
+```{r}
+
+# Type your code here
+
+```
+
+Consider the value you obtained for writer_confidence.
+What is the interpretation of this value?
+Think carefully about what we want to measure here.
+
+```
+Provide your answer here. 
+
+```
+Now consider both variables.
+As you can see, IRR is higher for one variable than the other.
+Based on this, what claims can we make about the reliability of ratings for these two variables?
+
+```
+Proivde your answer here. 
+```
+
+A common, more sophisticated measure of IRR for continuous variables is the **Intraclass Correlation Coefficient** (ICC). For categorical variables, the most useful measure of IRR is **Krippendorff's alpha**, which can handle any number of raters, missing data, and different types of data (nominal, ordinal, interval, ratio). Krippendorff's alpha subsumes several other measures of IRR (e.g. Cohen's kappa) as special cases. The R package `irr` provides functions to calculate ICC, as documented [here](https://cran.r-project.org/web/packages/irr/). 
+
+#### Outliers
+
+When working with real-world data, we often encounter **outliers**, i.e. data points that are significantly different from the rest of the data.
+Identify potential outliers in the `writer_stance` variable by selecting data points that are maximally different from the paragraph-level median of `writer_stance` ratings.
+
+```{r}
+# your code here
+```
+
+Given the context of this dataset, what do you think these outliers represent?
+
+```
+Provide you answer here. 
+
+```
+
+## Probability
+
+### Basic Notation and Probability of Events
+
+Consider a fair **12**-sided dice, and events A={rolling an even number} and B={rolling a number ≥ 4}.
+State the sample space S and compute the following probabilities:
+
+```
+S =
+Pr(A) =
+Pr(B) =
+Pr(A ∩ B) =
+Pr(A ∪ B) =
+Pr(A^c) =
+```
+
+Write a function that simulates rolling the 12-sided dice `n` times.
+
+```{r}
+# your code here
+```
+
+Use your function to simulate rolling the dice 10,000 times and estimate the probabilities above based on the simulation results.
+
+```{r}
+# your code here
+```
+
+Now simulate rolling the dice just 10 times and 100 times and estimate the probabilities again.
+
+```{r}
+# your code here
+```
+
+What do you observe about the estimates as the number of rolls increases?
+(Spoiler: We will discuss this in more detail next week.)
+
+```
+# your answer here
+```
+
+### Dependent and Independent Events
+
+Suppose we draw two cards sequentially from a standard deck of 52 playing cards *with* replacement.
+What is the probability that at least one card is an ace? Show your calculations.
+
+```{r}
+# your code here
+```
+
+Now suppose we draw two cards sequentially from a standard deck of 52 playing cards *without* replacement.
+What is the probability that at least one card is an ace? Show your calculations.
+
+```{r}
+# your code here
+```
+
+### Bayes' Rule
+
+Now for a more interesting example, let's look at **online misinformation**.
+Suppose that 5% of all social media posts contain misinformation.
+We have a detection model that correctly flags 90% of misinformation posts.
+This is the model's true positive rate, also known as recall or sensitivity. 
+However, the model also incorrectly flags 1% of non-misinformation posts as misinformation.
+This is the model's false positive rate.
+
+Let M be the event that a social media post contains misinformation, and let F be the event that the post is flagged by our detection model as containing misinformation.
+Calculate the probability that a post flagged by the model actually contains misinformation.
+This is known as the precision or positive predictive value of our model.
+
+```{r}
+# your code here
+```
+
+Due to new slang that our model has not seen before, the false positive rate increases to 2%, while all other rates remain the same.
+What happens to precision?
+
+```{r}
+# your code here
+```
+
+### Binomial distribution
+
+Adapt your 12-sided dice function from above to instead simulate a coin toss experiment, where the coin has a probability `p` of landing on heads and is tossed `n` times.
+The function should return the number of heads `k` obtained in the `n` tosses.
+
+```{r}
+# your code here
+```
+
+Use your function to simulate 500 experiments each of tossing:
+- a fair coin (p = 0.5) 20 times (n = 20),
+- a biased coin (p = 0.7) 20 times (n = 20),
+- a fair coin (p = 0.5) 40 times (n = 40).
+Store the results in three separate vectors.
+
+```{r}
+# your code here
+```
+
+We now want to visualise the distributions of the number of heads obtained in each of the three experiments.
+Say we want to show all three distributions in one plot for easy comparison.
+Histograms are not ideal for this purpose, as they can be hard to read when overlaid.
+Therefore, we will instead use the `geom_density()` function from `ggplot2`, which produces a smoothed version of the histogram.
+
+```{r}
+# your code here
+```
+
+The plot above shows the **empirical distributions** based on our simulations.
+We can use the `dbinom()` probability density function to compute the **theoretical probabilities** of obtaining `k` heads in `n` tosses of a coin with probability `p` of landing on heads.
+Correspondingly, the `pbinom()` cumulative density function computes the theoretical probabilities of obtaining `k` or fewer heads in `n` tosses.
+For each of the three coins above, compute the theoretical probabilities for Pr(k≤15) and compare them to the empirical probabilities from your simulations.
+
+```{r}
+# your code here
+```
+
+Coin tosses are useful for explaining probability, but we are not actually that interested in coins.
+Try to think of three examples of real-world phenomena that could be modelled using a binomial distribution.
+
+```
+# your answer here
+```
+
+### Normal Distribution
+
+As a reminder, the normal distribution N(μ,σ^2) is defined by two parameters: the mean `μ` and the standard deviation `σ`.
+Let’s start building some visual intuition by plotting normal distributions with different parameters.
+Use `dnorm()` to plot the probability density function (PDF) for N(0,1), N(0,5^2), and N(10,2^2) on the same figure.
+
+```{r}
+# your code here
+```
+
+For continuous random variables, probabilities are defined over intervals, not exact values.
+This is why we work with the cumulative distribution function (CDF).
+
+For the **standard normal distribution** N(0,1), use `pnorm()` to compute the following probabilities:
+Pr(Z ≤ 2), Pr(Z ≤ -2), and Pr(-2 ≤ Z ≤ 2).
+
+```{r}
+# your code here
+```
+
+Suppose that adult male height in the UK is normally distributed with a mean of 176 cm and a standard deviation of 7 cm.
+What proportion of men are taller than 190 cm? And what proportion are between 160 cm and 170 cm?
+To answer this question, calculate the **z-score**, as (x - μ) / σ, and then use the standard normal CDF.
+
+```{r}
+# your code here
+```
+
+Based on the formula, what is the interpretation of the z-score?
+
+```
+# your answer here
+```
