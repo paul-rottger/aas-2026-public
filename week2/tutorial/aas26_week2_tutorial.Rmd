@@ -415,9 +415,9 @@ Provide your answer here.
 
 In R, we can compute confidence intervals using quantiles of the normal distribution. The function `qnorm()` returns the critical Z-values associated with a given confidence level.
 
-Importantly, we can use the results of the CLT to calculate CIs for sample mean even when the sample itself is not normally distributed. 
+Importantly, we can use the results of the CLT to calculate CIs for the population mean even when the sample itself is not normally distributed. 
 
-Using `paragraph_informativeness`, calculate 90%, 95%, and 99% Z-based confidence intervals for the sample mean.
+Using `paragraph_informativeness`, calculate 90%, 95%, and 99% Z-based confidence intervals for the population mean.
 
 **Hint:** Remember that we previously calculated a vector of sample means for the `paragraph_informativeness` variable and stored it in the `means_pi` vector. The formula for Z-based CIs: 
 
