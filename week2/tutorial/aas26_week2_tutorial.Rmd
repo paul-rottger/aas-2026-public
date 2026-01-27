@@ -419,7 +419,7 @@ Importantly, we can use the results of the CLT to calculate CIs for the populati
 
 Using `paragraph_informativeness`, calculate 90%, 95%, and 99% Z-based confidence intervals for the population mean.
 
-**Hint:** Remember that we previously calculated a vector of sample means for the `paragraph_informativeness` variable and stored it in the `means_pi` vector. The formula for Z-based CIs: 
+**Hint:** The formula for Z-based CIs: 
 
 $$
 \left(
@@ -433,9 +433,9 @@ $$
 ```{r CI_prob practice 1} 
 set.seed(123)
 
-# Empirical parameters from the sampling distribution of the mean
-#x_bar <- ___     # empirical mean of sample means
-#se_hat <- ___     # empirical standard error of the mean 
+# Point estimate and standard error for the population mean
+#x_bar <- ___     # sample mean
+#se_hat <- ___     # standard error of the mean
 
 # Confidence levels
 #alphas <- c(___, ___, ___)
