@@ -1,0 +1,689 @@
+---
+title: "Week 2 Tutorial"
+subtitle: "Applied Analytical Statistics 2025/26"
+authors: Paul Röttger and Mikhail Korneev
+output:
+  html_document:
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## The limitations of the Law of Large Numbers (LLN) and the Central Limit Theorem (CLT)
+
+While **the Law of Large Numbers (LLN)** and **the Central Limit Theorem (CLT)** are powerful analytical tools, there are situations in which they cannot be reliably applied to real data. Consider the examples below. For each case, identify the issue that undermines the validity of using the LLN or the CLT for the given data set.
+
+1. **Data:** Daily gold prices (USD) from 2020 to 2026.
+
+2. **Data:** A survey of 30 students evaluating an OII graduate-level course.
+
+3. **Data:** Number of deaths from global health pandemics by decade in Europe, 1200–2026.
+
+```
+
+Daily gold prices: Observations are not independent or identically distributed; strong time dependence and non-stationarity undermine LLN and CLT assumptions.
+
+Course evaluation survey: The sample size is small and likely non-random, so asymptotic results from the LLN and CLT are unreliable.
+
+Pandemic deaths by decade: The data are sparse and heterogeneous across time, with extreme outliers that violate identical distribution assumptions.
+
+```
+
+## Law of Large Numbers (LLN) 
+
+In the lecture, we learned that the **Law of Large Numbers (LLN)** says that as the number of independent and identically distributed (i.i.d.) observations grows, the sample average approaches the population’s expected value. In simple terms, collecting more data makes the sample mean increasingly close to the true population mean.
+
+We illustrate this idea using a simple **coin toss** example, where the population mean corresponds to the probability of observing heads. 
+
+```{r LLN-theory} 
+library(ggplot2)
+set.seed(123)  # we need to set seed for replicability 
+
+n <- 100
+
+# Bernoulli distribution for a fair coin toss
+p <- 0.5
+x <- rbinom(n, size = 1, prob = p)  # 1 - heads, 0 - tails
+
+# Cumulative proportion of heads
+cummean <- cumsum(x) / seq_along(x)
+df_bernoulli <- data.frame(trial = 1:n, cummean = cummean)
+
+ggplot(df_bernoulli, aes(x = trial, y = cummean)) +
+  geom_line() +
+  geom_hline(yintercept = p, color = "red", linetype = "dashed") +
+  labs(title = "LLN: cumulative proportion of heads (p = 0.5)",
+       x = "Number of tosses", y = "Cumulative proportion of heads") +
+  theme_minimal()
+
+```
+
+The LLN applies to all (reasonable) distributions regardless of shape. In this exercise we’ll demonstrate the LLN for two very different populations: a standard Normal and an Exponential distribution (rate = 0.5).
+
+**Practice:** 
+Generate n = 5000 draws from each distribution, compute the cumulative means, and plot the two cumulative-mean series with `ggplot2`, adding a horizontal dashed line at each distribution’s true mean. Use `set.seed()` for reproducibility.
+
+```{r LLN-practice}
+
+library(ggplot2)
+set.seed(123)
+
+n <- 5000
+
+# Normal
+x_norm <- rnorm(n, mean = 0, sd = 1)
+cum_norm <- cumsum(x_norm) / seq_len(n)
+df_norm <- data.frame(trial = 1:n, cummean = cum_norm, distribution = "Normal (mu=0)")
+
+# Exponential
+rate <- 0.5
+x_exp <- rexp(n, rate = rate)
+cum_exp <- cumsum(x_exp) / seq_len(n)
+df_exp <- data.frame(trial = 1:n, cummean = cum_exp, distribution = "Exponential (mean=2)")
+
+df <- rbind(df_norm, df_exp)
+
+ggplot(df, aes(x = trial, y = cummean)) +
+  geom_line() +
+  geom_hline(data = data.frame(distribution = c("Normal (mu=0)", "Exponential (mean=2)"),
+                               true_mean = c(0, 1 / rate)),
+             aes(yintercept = true_mean), color = "red", linetype = "dashed") +
+  facet_wrap(~ distribution, scales = "free_y") +
+  labs(title = "LLN: cumulative mean — Normal vs Exponential",
+       x = "Number of samples", y = "Cumulative mean") +
+  theme_minimal()
+
+```
+
+## Central Limit Theorem
+
+**The Central Limit Theorem (CLT)** states that the distribution of the sample mean becomes approximately normal as the sample size increases, regardless of the shape of the underlying population distribution (as long as variance is finite).
+
+Unlike the LLN, the CLT focuses on the distribution of sample means **across repeated samples**, not on convergence within a single sample.
+
+To illustrate the Central Limit Theorem (CLT), we simulate repeated samples from a Uniform(0, 10) distribution and compare the empirical distribution of sample means to the theoretical normal distribution predicted by the CLT.
+
+```{r CLT-theory}
+library(ggplot2)
+set.seed(123)
+
+# Simulation parameters
+n_samples  <- 100 
+sample_size <- 50    
+
+# Simulate sample means 
+uniform_samples <- replicate(n_samples, mean(runif(sample_size, min = 0, max = 10)))
+df_unif <- data.frame(sample_mean = uniform_samples)
+
+# Theoretical population mean and CLT standard error for Uniform(0,10)
+pop_mean <- 5                             
+pop_sd <- 10 / sqrt(12)                   
+se_mean <- pop_sd / sqrt(sample_size)      # standard error of the sample mean
+
+# Plotting the estimation outcomes against theoretical distribution
+ggplot(df_unif, aes(x = sample_mean)) +
+  geom_histogram(aes(y = after_stat(density)),
+                 bins = 30, fill = "lightgrey", color = "black") +
+  stat_function(fun = dnorm,
+                args = list(mean = mean(uniform_samples), sd = sd(uniform_samples)),
+                color = "red", linewidth = 1, linetype = "dashed") +   # empirical normal fit
+  stat_function(fun = dnorm,
+                args = list(mean = pop_mean, sd = se_mean),
+                color = "darkgreen", linewidth = 1, linetype = "solid") + # theoretical CLT normal
+  labs(title = "CLT: Distribution of Sample Means (Uniform(0,10), n = 50)",
+       subtitle = paste0("Theoretical mean = ", pop_mean,
+                         ", theoretical SE = ", round(se_mean, 3)),
+       x = "Sample means", y = "Density") +
+  theme_minimal()
+
+
+```
+
+Does the sample means distribution approximate theoretical distribution? What happens if we increase the number of samples that we draw? 
+
+```
+When data is resampled 100 times, the sample means distribution deviates substantially from the theoretical distribution. However, as the sample size increases, the sample means ditribution approaches the theoretical distribution. 
+
+Notably, the CLT entails convergence in distribution, not equality. Therefore, for finate samples, the distribution of sample means never becomes truely normal. 
+
+```
+
+**Practice:**
+
+Let's consider variable distribution from the perception of political content data set that we worked with last week. First, load the data set. 
+
+```{r CLT_practice 1}
+
+library(readr)
+
+df <- read_csv(
+  "https://raw.githubusercontent.com/paul-rottger/aas-2026-public/refs/heads/main/week1/tutorial/week1_tutorial_sample.csv"
+)
+
+```
+
+The data set contains several continuous variables. In this section, we will work with the `writer_confidence` and the `paragraph_informativeness` variables. 
+
+First, for each variable, create a histogram to illustrate its distribution. 
+
+**Extra:** looking at the two graphs, are there any ways we can improve data visualization here?
+
+```{r CLT-practice 1} 
+library(ggplot2)
+
+# Distribution of writer_confidence
+p_hist_wi <- ggplot(df, aes(x = writer_confidence)) +
+  geom_histogram(aes(y = after_stat(density)),
+                 bins = 40, fill = "lightgrey", color = "black") +
+  geom_density(color = "blue") +
+  ylim(0, 0.05) +
+  labs(title = "Distribution of writer confidence", x = "Writer Confidence", y = "Density") +
+  theme_minimal()
+
+# Distribution of paragraph_informativeness
+p_hist_pi <- ggplot(df, aes(x = paragraph_informativeness)) +
+  geom_histogram(aes(y = after_stat(density)),
+                 bins = 40, fill = "lightgrey", color = "black") +
+  geom_density(color = "blue") +
+  ylim(0, 0.05) +
+  labs(title = "Distribution of Paragraph Informativeness", x = "Paragraph Informativeness", y = "Density") +
+  theme_minimal()
+
+
+# Dislpaying results next to each other 
+library(gridExtra)
+grid.arrange(p_hist_wi, p_hist_pi, ncol = 2)
+
+```
+
+What distributions do the writer_confidence and the paragraph_informativeness variables have? Comment on the shape and the skeweness of the data. Is there any clustering in the data? 
+
+```
+
+The distribution of writer confidence is left-skewed. The distribution of paragraph informativeness is right-skewed. Neither variable follows a normal distribution; both display irregular shapes and pronounced peaks near extreme values, indicating deviations from normality.
+
+```
+
+**Practice:**
+
+Although the two variables have very different distributions, the CLT applies to both. To demonstrate this, draw 500 samples of size 50 from each variable, compute the sample mean for each draw, and plot histograms of the resulting distributions of sample means.
+
+```{r CLT-practice 2}
+
+library(ggplot2)
+
+# Repeated sampling and collection of sample means
+set.seed(123)
+
+sample_size <- 50
+n_samples   <- 500
+
+# Sample means for writer_confidence
+means_wc <- replicate(
+  n_samples,
+  mean(sample(df$writer_confidence, size = sample_size, replace = TRUE))
+)
+
+# Sample means for paragraph_informativeness
+means_pi <- replicate(
+  n_samples,
+  mean(sample(df$paragraph_informativeness, size = sample_size, replace = TRUE))
+)
+
+# Plot: sample means for writer_confidence
+p1 <- ggplot(data.frame(sample_mean = means_wc), aes(x = sample_mean)) +
+  geom_histogram(aes(y = after_stat(density)),
+                 bins = 30, fill = "lightgrey", color = "black") +
+  labs(
+    title = paste0("Writer Confidence"),
+    x = "Sample means",
+    y = "Density"
+  ) +
+  geom_density(color = "blue") +
+  theme_minimal()
+
+# Plot: sample means for paragraph_informativeness
+p2 <- ggplot(data.frame(sample_mean = means_pi), aes(x = sample_mean)) +
+  geom_histogram(aes(y = after_stat(density)),
+                 bins = 30, fill = "lightgrey", color = "black") +
+  labs(
+    title = paste0("Paragraph Informativeness"),
+    x = "Sample means",
+    y = "Density"
+  ) +
+  geom_density(color = "blue") +
+  theme_minimal()
+
+# Displaying results next to each other 
+library(gridExtra)
+grid.arrange(p1, p2, ncol = 2)
+
+```
+
+What can we tell about the distribution of sample means for the two variables? 
+
+```
+Although the initial distributions of the two variables were not normal, the distribution of sample means for both variables is symmetric and approaches normal distribution.
+
+```
+
+How closely does the distribution of sample means approximate a normal distribution for each of the two variables?
+
+Select one variable, estimate the empirical mean and standard deviation of its sampling distribution, and add the corresponding theoretical normal probability density function to the plot.
+
+```{r CLT-practice 3} 
+
+mean_emp <- mean(means_wc)
+sd_emp <- sd(means_wc)
+
+ggplot(data.frame(sample_mean = means_wc), aes(x = sample_mean)) +
+  geom_histogram(aes(y = after_stat(density)),
+                 bins = 30, fill = "lightgrey", color = "black") +
+  labs(
+    title = paste0("Writer Confidence"),
+    x = "Sample means",
+    y = "Density"
+  ) +
+  geom_density(color = "blue") +
+  stat_function(fun = dnorm,
+                args = list(mean = mean_emp, sd = sd_emp),
+color = "darkgreen", linewidth = 1, linetype = "solid") +
+
+  theme_minimal()
+
+```
+
+
+**Practice:**
+
+The accuracy of the sample mean estimates depends on the sample size. Re-run the estimation of the `paragraph_informativeness` variable using sample sizes of 5, 30, and 100, and compare the resulting distributions of sample means.
+
+```{r CLT-practice 4}
+
+set.seed(123)
+
+# Population variable
+x <- df$paragraph_informativeness
+
+# Parameters
+n_samples <- 500
+sample_sizes <- c(5, 30, 100)
+
+# Collect sample means for different sample sizes
+df_means <- do.call(rbind, lapply(sample_sizes, function(n) {
+  means <- replicate(
+    n_samples,
+    mean(sample(x, size = n, replace = TRUE))
+  )
+  data.frame(sample_mean = means, sample_size = factor(n))
+}))
+
+# Plot
+ggplot(df_means, aes(x = sample_mean)) +
+  geom_histogram(aes(y = after_stat(density)),
+                 bins = 30, fill = "lightgrey", color = "black") +
+  facet_wrap(~ sample_size) +
+  labs(
+    title = "Distribution of sample means for increasing sample size",
+    subtitle = "Resampling from paragraph_informativeness",
+    x = "Sample means",
+    y = "Density"
+  ) +
+  theme_minimal()
+
+```
+
+What happens to the distribution of sample means, as we increase the sample size? 
+
+```
+
+As the sample size increases, the distribution of sample means becomes narrower and more concentrated around the population mean. The variability (spread) of the sample means decreases, leading to more precise and accurate estimates of the true mean. Additionally, the distribution of sample means becomes increasingly symmetric and approaches a normal distribution.
+
+```
+## Confidence Intervals Using Bootstrap 
+
+Resampling is a powerful technique for quantifying uncertainty when the true population parameters are unknown. One of its most common applications is bootstrap resampling (or bootstrapping), which approximates the sampling distribution of a statistic by repeatedly resampling the observed data with replacement.
+
+Below is a simple bootstrap function that implements a percentile bootstrap confidence interval. The function repeatedly resamples the data, computes the statistic of interest on each resample, and then constructs a confidence interval by taking the appropriate quantiles of the bootstrap distribution.
+
+```{r CI_boot theory}
+
+bootstrap_ci <- function(x, stat_func, n_samples, conf) {
+  n <- length(x)
+  boot_stats <- replicate(n_samples, stat_func(sample(x, size = n, replace = TRUE))) # Generate n_samples bootstrap resamples by sampling x with replacement
+  alpha <- 1 - conf # Convert the confidence level into the significance level alpha
+  ci <- as.numeric(quantile(boot_stats, probs = c(alpha/2, 1 - alpha/2))) # Compute the lower and upper bounds of the percentile bootstrap
+  # confidence interval using the empirical distribution of boot_stats
+  list(stat = stat_func(x), ci = ci, boots = boot_stats) # Return a list containing variables of interest
+}
+
+```
+
+**Practice:**
+
+Using the `paragraph_informativeness` variable, apply the bootstrap procedure to estimate confidence intervals for the mean at different confidence levels. Set the number of bootstrap resamples to n_samples = 500, and compute 90%, 95%, and 99% percentile bootstrap confidence intervals. 
+
+```{r CI_boot practice 1}
+
+set.seed(123)
+x <- df$paragraph_informativeness
+
+res90  <- bootstrap_ci(x, stat_func = mean, n_samples = 500,   conf = 0.9)
+res95 <- bootstrap_ci(x, stat_func = mean, n_samples = 500,  conf = 0.95)
+res99 <- bootstrap_ci(x, stat_func = mean, n_samples = 500,  conf = 0.99)
+
+res90$stat     # point estimate (sample mean)
+res90$ci       # 90% CI with n_samples = 500
+res95$ci       # 95% CI 
+res99$ci       # 99% CI 
+
+# Compare widths and endpoints
+width <- function(ci) diff(ci)
+c(width90 = width(res90$ci), width95 = width(res95$ci), width99 = width(res99$ci))
+
+```
+
+Compare the resulting intervals and describe how their widths change as the confidence level increases.Are the bootstrap CIs symmetric?
+
+```
+
+As the confidence level increases from 90% to 95% to 99%, the confidence intervals become wider. The 90% confidence interval is the narrowest, while the 99% confidence interval is the widest. This increase in width reflects greater uncertainty: higher confidence levels require a larger range of values to ensure that the interval captures the true population mean with the specified level of confidence.
+
+```
+
+Next, let's examine how the number of bootstrap resamples affects the stability of confidence interval estimates. Using the `paragraph_informativeness` variable, compute 95% percentile bootstrap confidence intervals for the mean with a very small number of resamples (n_samples = 10) and with a much larger number of resamples (n_samples = 1000). Visualize the results using boxplots of the bootstrap distributions with error bars indicating the corresponding confidence intervals.
+
+**Hint:** don't forget to fill in the values for `geom_errorbar()`.  
+
+```{r CI_boot practice 2}
+
+library(ggplot2)
+library(gridExtra)
+
+x <- df$paragraph_informativeness
+
+# 1) n_samples = 10
+res10 <- bootstrap_ci(x = x, stat_func = mean, n_samples = 10, conf = 0.95)
+boots10 <- data.frame(boot = res10$boots)
+mean10 <- res10$stat
+ci10_l <- res10$ci[1]
+ci10_u <- res10$ci[2]
+
+p_boot_10 <- ggplot(boots10, aes(x = factor(1), y = boot)) +
+  geom_boxplot(width = 0.35, outlier.shape = NA, fill = "grey90") +
+  geom_errorbar(data = data.frame(x = factor(1), ymin = ci10_l, ymax = ci10_u),
+                mapping = aes(x = x, ymin = ymin, ymax = ymax),
+                inherit.aes = FALSE, color = "red", size = 1.0, width = 0.12) +
+  labs(title = "n_samples = 10", subtitle = paste0("95% CI: [", round(ci10_l, 3), ", ", round(ci10_u, 3), "]"),
+       x = NULL, y = "Bootstrap mean") +
+  ylim(40, 45) +
+  theme_minimal() 
+
+# 2) n_samples = 1000
+res1000 <- bootstrap_ci(x = x, stat_func = mean, n_samples = 1000, conf = 0.95)
+boots1000 <- data.frame(boot = res1000$boots)
+mean1000 <- res1000$stat
+ci1000_l <- res1000$ci[1]
+ci1000_u <- res1000$ci[2]
+
+p_boot_1000 <- ggplot(boots1000, aes(x = factor(1), y = boot)) +
+  geom_boxplot(width = 0.35, outlier.shape = NA, fill = "grey90") +
+  geom_errorbar(data = data.frame(x = factor(1), ymin = ci1000_l, ymax = ci1000_u),
+                mapping = aes(x = x, ymin = ymin, ymax = ymax),
+                inherit.aes = FALSE, color = "red", size = 1.0, width = 0.12) +
+  labs(title = "n_samples = 1000", subtitle = paste0("95% CI: [", round(ci1000_l, 3), ", ", round(ci1000_u, 3), "]"),
+       x = NULL, y = NULL) +
+  ylim(40, 45) +
+  theme_minimal()
+
+# Display side-by-side
+grid.arrange(p_boot_10, p_boot_1000, ncol = 2)
+
+```
+
+Compare the two resulting plots and describe how the estimated confidence interval and the bootstrap distribution change as the number of resamples increases.
+
+```
+
+With a small number of resamples (n = 10), the bootstrap distribution is rough and highly variable, leading to a less stable confidence interval that is sensitive to random fluctuations. As the number of bootstrap resamples increases, the bootstrap distribution becomes smoother and more stable, providing a more reliable approximation of the sampling distribution of the mean.
+
+```
+
+## Confidence Intervals Using Probability Theory 
+
+Bootstrapping allows us to construct confidence intervals when the sampling distribution of a statistic is unknown or difficult to derive analytically. However, when the sampling distribution of the sample mean is known or can be well approximated by a normal distribution, probability theory can be used to construct confidence intervals directly.
+
+In particular, if the population is normally distributed, or if the sample size is sufficiently large for **the Central Limit Theorem** to apply, the sampling distribution of the sample mean is approximately normal. If the population standard deviation is known, a Z-based confidence interval can be used.
+
+Suppose a population is normally distributed with a known standard deviation of 10. A random sample of size 32 has a mean of 52. Using a Z-table, find the critical value for a 90% confidence level, and compute a 90% confidence interval for the population mean.
+
+```
+For a 90% confidence level, the critical Z-value from the Z-table is 1.645. Standard Errors (SE) can be computed as:
+
+standard deviation / sqrt(n) = 10/sqrt(32) = 1.77
+
+Plugging in the values for Z-based CIs gives: 
+
+upper_CI = mean + 1.645 * SE = 52 + 1.645 * 1.77 = 54.91
+lower_CI = mean - 1.645 * SE = 52 - 1.645 * 1.77 = 49.09
+
+90% confidence interval for the population mean: (49.09, 54.91)
+
+```
+
+**Practice:**
+
+In R, we can compute confidence intervals using quantiles of the normal distribution. The function `qnorm()` returns the critical Z-values associated with a given confidence level.
+
+Importantly, we can use the results of the results of the CLT to calculate CIs for population mean even when the sample itself is not normally distributed. 
+
+Using `paragraph_informativeness`, calculate 90%, 95%, and 99% Z-based confidence intervals for the population mean.
+
+**Hint:** The formula for Z-based CIs: 
+
+$$
+\left(
+\bar{x} - z_{1-\alpha/2}\,*{SE},
+\;
+\bar{x} + z_{1-\alpha/2}\,*{SE}
+\right),
+$$
+
+```{r CI_prob practice 1} 
+set.seed(123)
+
+# Point estimate and standard error for the population mean
+x_bar <- mean(df$paragraph_informativeness)     # sample mean
+se_hat <- sd(df$paragraph_informativeness) / sqrt(length(df$paragraph_informativeness))  # standard error of the mean
+
+# Confidence levels
+alphas <- c(0.10, 0.05, 0.01)
+
+# Compute normal-based confidence intervals
+ci_z <- lapply(alphas, function(alpha) {
+  z <- qnorm(1 - alpha / 2)
+  c(
+    lower = x_bar - z * se_hat,
+    upper = x_bar + z * se_hat
+  )
+})
+
+names(ci_z) <- c("90%", "95%", "99%")
+ci_z
+
+```
+
+To understand the frequentist interpretation of confidence intervals, we will examine their coverage. Coverage is the proportion of confidence intervals that contain the true population parameter when the sampling process is repeated many times.
+
+Let's go back to the `writer_confidence` variable.
+
+Repeatedly draw 5000 samples of size 100 from the writer confidence data. For each sample, construct a 95% normal-based confidence interval for the mean and record whether it contains the mean of the full dataset. Use the results to estimate the empirical coverage of the confidence interval.
+
+```{r CI_prob practice 2}
+
+set.seed(123)
+
+# true mean of the population (approximated by full data)
+mu_true <- mean(df$writer_confidence)
+
+z_contains <- logical(5000)
+
+for (i in 1:5000) {
+
+  # draw a sample from a non-normal population
+  x <- sample(df$writer_confidence, size = 100, replace = TRUE)
+
+  xbar <- mean(x)
+  s <- sd(x)
+
+  # CLT-based normal CI (unknown sigma → use s)
+  z_lower <- xbar - 1.96 * s / sqrt(n)
+  z_upper <- xbar + 1.96 * s / sqrt(n)
+
+  # check whether CI contains the true mean
+  z_contains[i] <- (z_lower <= mu_true) & (mu_true <= z_upper)
+}
+
+mean(z_contains)  # empirical coverage
+
+```
+
+
+**Extra:** The same probability-theory approach can be applied to categorical (binary) data. Instead of estimating a population mean, we now estimate a population proportion.
+
+Suppose we draw a random sample of 400 voters, and 238 of them report supporting a new policy. Compute the sample proportion of policy supporters. Using the normal approximation, construct a 95% confidence interval for the population proportion.
+
+**Hint:** Z-based CIs formula for proportions is: 
+
+$$
+\left(
+\hat{p} - z_{1-\alpha/2}\sqrt{\frac{\hat{p}(1-\hat{p})}{n}},
+\;
+\hat{p} + z_{1-\alpha/2}\sqrt{\frac{\hat{p}(1-\hat{p})}{n}}
+\right),
+$$
+
+```{r CI_prob practice 3} 
+
+p_hat <- 238 / 400
+n <- 400
+z <- qnorm(0.975)
+
+ci_95_proportion <- c(
+  lower = p_hat - z* sqrt(p_hat * (1 - p_hat) / n),
+  upper = p_hat + z* sqrt(p_hat * (1 - p_hat) / n)
+)
+
+ci_95_proportion
+
+```
+
+## Confidence Intervals for Standard Deviation 
+
+So far, we have constructed confidence intervals for means and proportions. In this section, we focus on variability. When data are normally distributed, probability theory allows us to construct confidence intervals for the population variance and standard deviation using the chi-squared distribution.
+
+When a population is normally distributed, the sample variance has a known sampling distribution. Specifically,
+
+$$
+\frac{(n-1)s^2}{\sigma^2} \sim \chi^2_{\,n-1}
+$$
+
+We can visualize the chi-squared distribution for sample variance using `ggplot`. The `df` in the solution stands for the **degrees of freedom**, which is the number of independent pieces of information that are free to vary, given the constraints that we have. This is a key parameter of the chi-squared distribution. 
+
+```{r CI_chi theory}
+
+library(ggplot2)
+
+df <- 5
+x <- seq(0, 40, length.out = 1000)
+
+df_chi <- data.frame(
+  x = x,
+  density = dchisq(x, df = df)
+)
+
+ggplot(df_chi, aes(x = x, y = density)) +
+  geom_line() +
+  labs(
+    title = paste0("Chi-squared distribution (df = ", df, ")"),
+    x = "Value",
+    y = "Density"
+  ) +
+  theme_minimal()
+
+
+```
+
+
+How does the chi-squared distribution differ from the normal distribution? What happens when the degrees of freedom increase? 
+
+```
+
+The chi-squared distribution is defined only for non-negative values, is asymmetric (right-skewed), and its shape depends on the degrees of freedom. In contrast, the normal distribution is symmetric, bell-shaped, and defined over the entire real line.
+
+As the degrees of freedom increase, the chi-squared distribution becomes less skewed and more symmetric. Its mean and variance increase, and the distribution gradually approaches a normal distribution in shape, centered around its mean. 
+
+```
+
+**Practice:**
+
+Similar to the sample mean, we can use probability theory to construct confidence intervals for variability when the population distribution is normal. In this case, the sampling distribution of the sample variance is known and follows a chi-squared distribution.
+
+Suppose we draw a random sample of size 30 from a normally distributed population with a mean of 50 and a true standard deviation of 10. Using this sample, construct a 95% confidence interval for the population standard deviation.
+
+**Hint:** calculate lower and upper critical values from a chi-squared distribution. Then use the formulas for the CIs to compute corresponding values for population variance using the formulas below: 
+
+$$
+\left(
+\frac{(n-1)s^2}{\chi^2_{1-\alpha/2,\,n-1}},
+\;
+\frac{(n-1)s^2}{\chi^2_{\alpha/2,\,n-1}}
+\right),
+$$
+
+```{r CI_chi practice 1}
+
+set.seed(123)
+
+# Simulated normal data
+n <- 30
+true_sigma <- 10
+x <- rnorm(n, mean = 50, sd = true_sigma)
+
+s2 <- var(x)
+deg_freedom <- n - 1
+alpha <- 0.05
+
+chi_lower <- qchisq(1 - alpha/2, df = deg_freedom)  # upper critical value
+chi_upper <- qchisq(alpha/2, df = deg_freedom)      # lower critical value
+
+# CI for variance
+ci_var <- c(
+  lower = deg_freedom * s2 / chi_lower,
+  upper = deg_freedom * s2 / chi_upper
+)
+
+# CI for standard deviation
+ci_sd <- sqrt(ci_var)
+
+ci_sd
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
