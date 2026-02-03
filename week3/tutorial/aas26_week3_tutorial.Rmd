@@ -1,0 +1,398 @@
+---
+title: "Week 3 Tutorial"
+subtitle: "Applied Analytical Statistics 2025/26"
+authors: Paul Röttger and Mikhail Korneev
+output:
+  html_document:
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This tutorial focuses on the application of hypothesis testing to real-world data. It covers one-sample t-test, two-sample t-test, chi-squared test, and paired t-test. For all questions regarding the materials, please contact Mikhail Korneev at mikhail.korneev@reuben.ox.ac.uk. 
+
+In this tutorial, we will be working with an extended version of paragraph data from last two weeks. For every human-written paragraph, there is an AI-assisted paragraph version. Paragraph authorship is indicated by the paragraph_type column ("writer" or "model").
+
+First, download the new version of the dataset from GitHub. 
+
+```{r load data, message = FALSE, warning = FALSE, }
+
+library(readr)
+
+df <- read_csv(
+  "https://raw.githubusercontent.com/paul-rottger/aas-2026-public/refs/heads/main/week3/tutorial/week3_tutorial_sample.csv"
+)
+
+```
+
+Let's familiarize ourselves with the new dataset. 
+
+```{r data description, message = FALSE} 
+
+library(dplyr)
+library(tidyr)
+
+# A quick look at the variables
+head(df, 10)
+
+# Let's count the number of writers, raters, and paragraphs (by type)
+df %>%
+  summarise(
+    `unique raters` = n_distinct(rater_id),
+    writers = n_distinct(writer_id),                   
+    paragraphs = list(
+      count(pick(everything()), paragraph_type) %>%
+        pivot_wider(
+          names_from  = paragraph_type,
+          values_from = n,
+          values_fill = 0,
+          names_prefix = "paragraphs "
+        )
+    )
+  ) %>%
+  unnest(paragraphs)
+
+```
+
+### Testing a single mean (one-sample t-test) 
+
+From the week 2 lecture, we know that the sampling distribution for i.i.d. samples is well approximated by a normal distribution. Using sample-based estimates, in the tutorial for week 2, we constructed **Z-based confidence intervals** for population parameters.
+
+In practice, Z-based inference requires strong assumptions about the population standard deviation, which is usually unknown. Instead, it is common to use the **t-distribution**, which accounts for the additional uncertainty introduced by estimating the population standard deviation from the sample. An alternative to the analytical approach is the computational approach that uses **bootstrap methods**.
+
+**Practice:**
+
+Consider the function below, which returns a p-value for a **two-sided one-sample t-test**. 
+
+```{r 1-sample-t theory}
+
+# one-sample t-test (two_tailed)
+one_sample_t_pvalue <- function(x, mu) {
+  n  <- length(x)
+  x_bar  <- mean(x)
+  s  <- sd(x)
+  
+  t_stat <- (x_bar - mu) / (s / sqrt(n))
+  df <- n - 1
+  
+  p_value <- 2 * pt(-abs(t_stat), df)
+  
+  # decision message (alpha = 0.05)
+  if (p_value < 0.05) {
+    cat("Reject the null hypothesis, p-value =", p_value, "\n")
+  } else {
+    cat("Fail to reject the null hypothesis, p-value =", p_value, "\n")
+  }
+
+}
+
+# example usage: 
+#one_sample_t_pvalue(df$writer_knowledge, 50)
+
+```
+
+What is the interpretation of the **t-statistic** computed by this function? How should the resulting **p-value** be interpreted?
+
+```
+
+Provide your answer here. 
+
+```
+
+**Practice:**
+
+Choose one continuous variable from the updated dataset. Test whether the true population mean is equal to 50 (H0: mu = 50) or is a different from 50 (H1: mu != 50) at the 95% confidence level separately for human-written paragraphs and AI-written paragraphs. 
+
+In R, a t-test can be performed using the `t.test()` function from the `stats` package. Conduct the test using the `one_sample_t_pvalue()` manual function and confirm the results with `t.test()`. 
+
+
+```{r 1-sample-t practice 1} 
+library(stats)
+
+# 1. Splitting the sample into human- and AI-written paragraphs
+#df_human <- subset(df, df$paragraph_type == "writer")
+#df_AI <- subset(___)
+
+# Add your code here
+
+```
+
+**Practice:**
+
+While the t-distribution accounts for the uncertainty introduced by estimating the population standard deviation from the sample, the t-test may perform poorly when the population variance is too complex or when the sample size is small. From the previous tutorial, we know that these issues can be addressed using **bootstrap methods**.
+
+Consider a manual **bootstrap t-test function** below: 
+
+```{r 1-sample-t theory bootstrap} 
+# 1-sample bootstrap t-test
+one_sample_bootstrap_pvalue <- function(x, mu, B) {
+  
+  n <- length(x)
+  x_bar <- mean(x)
+  s <- sd(x)
+  
+  # observed t-statistic
+  t_obs <- (x_bar - mu) / (s / sqrt(n))
+  
+  # shift data to satisfy H0
+  x_null <- x - x_bar + mu
+  
+  # bootstrap t-statistics under H0
+  boot_t <- replicate(
+    B,
+    {
+      samp <- sample(x_null, n, replace = TRUE)
+      (mean(samp) - mu) / (sd(samp) / sqrt(n))
+    }
+  )
+  
+  # two-sided p-value using t-statistics
+  p_value <- mean(abs(boot_t) >= abs(t_obs))
+  
+  # decision message (alpha = 0.05)
+  if (p_value < 0.05) {
+    cat("Reject the null hypothesis, p-value =", p_value, "\n")
+  } else {
+    cat("Fail to reject the null hypothesis, p-value =", p_value, "\n")
+  }
+  
+}
+```
+
+Use the manual `one_sample_bootstrap_pvalue()` function to re-run the t-test from the previous exercise. Does the bootstrap method produce different results?
+
+Confirm the results using a `boot.t.test()` function from the `MKinfer` package
+
+```{r 1-sample-t practice 2}
+# One sample t-test for a 95% CI using bootstrap
+library(MKinfer)
+
+# Add your code here
+
+```
+
+### Testing for a difference in means (two-sample t-test) 
+
+One of the most common applications of the t-test is testing for a **difference in sample means**.
+
+Suppose we want to test whether there are systematic differences in the originality between human-written paragraphs and AI-written paragraphs.
+
+- What is the null hypothesis?
+
+- What is the alternative hypothesis?
+
+- What property of the t-distribution allows us to move from estimating a single sample mean to estimating the difference in sample means?
+
+```
+Provide your answer here. 
+
+```
+
+**Practice:**
+
+Let's update the manual t-test function to estimate the difference in sample means. Edit the 1-sample t-test function below to implement a 2-sample t-test. For simplicity, assume equal variance of the sample means. 
+
+```{r 2-sample-t theory} 
+
+# two-sample t-test (two-tailed, equal variances)
+#two_sample_t_pvalue <- function(x, y) {
+  
+  #n  <- length(x)
+  #x_bar  <- mean(x)
+  #s  <- sd(x)
+  
+  #t_stat <- (x_bar - mu) / (s / sqrt(n))
+  #df <- n - 1
+  
+  #p_value <- 2 * pt(-abs(t_stat), df)
+  
+  # decision message (alpha = 0.05)
+  #if (p_value < 0.05) {
+  #  cat("Reject the null hypothesis, p-value =", p_value, "\n")
+  #} else {
+  #  cat("Fail to reject the null hypothesis, p-value =", p_value, "\n")
+  #}
+
+```
+
+**Practice:**
+
+Let’s return to the dataset. In which characteristics would you expect the perceived qualities of human-written and AI-written paragraphs to differ?
+
+Select one continuous variable and:
+
+- Visualise its distribution for human-written and AI-written paragraphs.
+
+- Test the difference in means between human- and AI-written paragraphs using either the `two_sample_t_pvalue()`, confirm the results with the `t.test()` function. 
+
+**Extra:** Estimate the difference in means using **bootstrapping**. Do the bootstrap results differ from those obtained using the standard t-test?
+
+```{r 2-sample-t practice} 
+
+library(ggplot2)
+
+# Add your code here
+
+```
+
+### Effect size and practical significance (Cohen's d) 
+
+While p-values are informative, they are not the only quantity that matters when interpreting t-test results. Beyond distinguishing statistically significant from non-significant differences, we also want to assess **the size of the effect**.
+
+A common measure of effect size is **Cohen’s d**, which quantifies the difference between sample means in units of the pooled population standard deviation.
+
+```{r Cohen_s d theory} 
+
+# Cohen's d for a two-sample t-test
+cohens_d_manual <- function(x, y) {
+  
+  n1 <- length(x)
+  n2 <- length(y)
+  
+  m1 <- mean(x)
+  m2 <- mean(y)
+  
+  s1 <- sd(x)
+  s2 <- sd(y)
+  
+  #pooled standard deviation 
+  s_pooled <- sqrt(
+    ((n1 - 1) * s1^2 + (n2 - 1) * s2^2) / (n1 + n2 - 2)
+  )
+  
+  # d value
+  d <- (m1 - m2) / s_pooled
+  
+  return(d)
+}
+
+# Example usage
+#cohens_d_manual(df$writer_confidence[df$paragraph_type == "model"], 
+#                df$writer_confidence[df$paragraph_type == "writer"])
+
+```
+
+**Practice:**
+
+Returning to the dataset, in which characteristics do human-written and AI-written paragraphs differ the most? Identify two variables for which the difference in means is statistically significant at the 95% confidence level, but where the effect sizes differ. 
+
+**Hint:** Use the `cohens_d_manual()` function and the `two_sample_t_pvalue()` (or the `t.test()`) function as in previous sections to test for differences in means. 
+
+```{r Cohen_s d practice}
+
+# Add your code here
+
+```
+
+Comment on practical vs statistical significance for the two variables. 
+
+```
+
+Provide your answer here. 
+
+```
+
+### Testing for a difference in proportions (Chi-squared test) 
+
+Up to this point in the tutorial, we have focused on differences in continuous variables. However, we may also be interested in differences in **categorical variables** between human- and AI-written paragraphs.
+
+To test for differences in proportions, the t-test is not appropriate; instead, we use a **chi-squared test**.
+
+```{r chi_sq theory} 
+
+# chi-squared test for difference in proportions
+chisq_pvalue <- function(x, y) {
+  
+  # contingency table
+  obs <- table(x, y)
+  
+  # expected counts
+  row_totals <- rowSums(obs)
+  col_totals <- colSums(obs)
+  grand_total <- sum(obs)
+  
+  # Expected counts under independence for each cell
+  exp <- outer(row_totals, col_totals) / grand_total
+  
+  # chi-squared statistic
+  chisq_stat <- sum((obs - exp)^2 / exp)
+  
+  df <- (nrow(obs) - 1) * (ncol(obs) - 1)
+  
+  # Chi-squared test is not directional => one-tail test
+  p_value <- pchisq(chisq_stat, df, lower.tail = FALSE)
+  
+  # decision message (alpha = 0.05)
+  if (p_value < 0.05) {
+    cat("Reject the null hypothesis, p-value =", p_value, "\n")
+  } else {
+    cat("Fail to reject the null hypothesis, p-value =", p_value, "\n")
+  }
+}
+
+# example of usage 
+#chisq_pvalue(df$writer_race, df$paragraph_type)
+
+```
+
+**Practice:** 
+
+In which categorical variables would you expect the perceived qualities of human-written and AI-written paragraphs to differ? Choose one categorical variable and display the contingency table for the selected variable. Then conduct a **chi-squared test** using the `chisq_pvalue()` manual function. Confirm results with a `chisq.test()` function from the `stats` package. 
+
+**Extra:**
+
+Visualise the distribution of the variable across paragraph types using `geom_bar()`.
+
+```{r chi_sq practice}
+
+# Add your code here
+
+```
+
+### Paired t-test
+
+The t-test is a widely used analytical tool in the social sciences. When observations come in **pairs** — for example, repeated measurements on the same unit or matched observations across conditions — it is important to account for this structure.
+
+Paired data allow us to test mean differences **within units**, which removes between-unit variation and results in a more powerful test. In such settings, the appropriate method is the **paired t-test**, rather than an **independent-samples t-test**.
+
+In this final section, we focus on the implementation of the **paired t-test**. Upload the new version of the dataset in which ratings are aggregated across raters for each paragraph. This dataset provides paired data: for each human-written paragraph, there is a corresponding AI-assisted version.
+
+```{r new data, message = FALSE}
+
+library(readr)
+
+df_aggregated <- read_csv(
+  "https://raw.githubusercontent.com/paul-rottger/aas-2026-public/refs/heads/main/week3/tutorial/week3_tutorial_sample_aggregated.csv"
+)
+
+```
+
+**Practice:**
+
+Using the aggregated dataset, implement a **paired t-test** to compare human-written and AI-assisted versions of the same paragraphs. Choose a variable that you used for the two-sample t-test exercise. 
+
+Next, compare the results of the paired t-test to those obtained from the unpaired t-test on the aggregated data. How do the estimated confidence intervals and p-values differ between the two approaches? 
+
+**Hint:** use `help()` function on `t.test()` to see how to perform a paired t-test. 
+
+```{r paired t-test practice}
+
+# Add your code here. 
+
+```
+
+```
+Provide your answer here. 
+
+```
+
+
+
+
+
+
+
+
+
