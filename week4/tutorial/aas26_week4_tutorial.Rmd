@@ -50,9 +50,9 @@ ggplot(data, aes(x = x, y = y)) +
   ) +
   
   # Linear trend candidates
-  geom_abline(intercept = 20, slope = 5, linetype = "dashed", colour = "red") +
-  geom_abline(intercept = 20, slope = 15, linetype = "dashed", colour = "green") +
-  geom_abline(intercept = 30, slope = 10, linetype = "dashed", colour = "blue") +
+  geom_abline(intercept = 5, slope = 5, linetype = "dashed", colour = "red") +
+  geom_abline(intercept = 5, slope = 15, linetype = "dashed", colour = "green") +
+  geom_abline(intercept = 10, slope = 10, linetype = "dashed", colour = "blue") +
   
   theme_minimal()
 
