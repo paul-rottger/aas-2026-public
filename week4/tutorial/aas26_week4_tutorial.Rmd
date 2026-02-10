@@ -315,7 +315,7 @@ ols_with_se <- function(x, y) {
 
 Now that we have a **coefficient** and **standard errors**, we can quantify the uncertainty for our estimations. OLS coefficients are built from **averages of i.i.d. data**. This is why the **Central Limit Theorem** applies to univariate OLS coefficients.
 
-Consider the association between **social media usage** (the dependent variable) and the **number of sleeping hours** (the independent variable). 
+Consider the association between **social media usage** (the independent variable) and the **number of sleeping hours** (the dependent variable). 
 
 Calculate the value and the standard error for the slope coefficient of the independent variable on the dependent variable, using the `ols_with_se()` function. Then, calculate the **95% confidence intervals** for the true population coefficient. 
 
