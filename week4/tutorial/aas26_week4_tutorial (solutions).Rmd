@@ -1,0 +1,472 @@
+---
+title: "Week 4 Tutorial"
+subtitle: "Applied Analytical Statistics 2025/26"
+author: "Paul Röttger and Mikhail Korneev"
+output:
+  html_document:
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This tutorial focuses on the theory and the application of the **univariate linear regression model**. It covers the ordinary least squares intuition, the interpretation of coefficients for continuous and categorical variables, standard errors of coefficients, and hypothesis tests on coefficients. For all questions regarding the materials, please contact Mikhail Korneev at mikhail.korneev@reuben.ox.ac.uk. 
+
+In this tutorial, we will work with a dataset on **Students' Social Media Addiction** from a survey study, published by Adil Shamim on Kaggle at https://www.kaggle.com/datasets/adilshamim8/social-media-addiction-vs-relationships/data. The data was collected via a one-time online survey and targeted university students between the age of 16 and 25. 
+
+By the end of this tutorial, you will be able to answer the following questions:
+
+- How does a univariate regression model **work**?
+- What types of **research questions** can be addressed using univariate regression models?
+- How can a univariate regression model be used to **explore the relationship** between the use of social media and lifestyle outcomes? 
+
+### Univariate OLS: the intuition 
+
+Regression analysis explores the association between dependent and independent variables. Unlike some of the previous measures of correlation that we covered in the previous weeks, such as the Spearman's coefficient, regression assumes **directionality of the association (x is the predictor, y is the outcome)** and allows us to express the association in the **units** of x and y. 
+
+In this tutorial, we will be covering the **Ordinary Least Squares (OLS)** estimator for univariate linear regression models. 
+
+To see how the OLS model identifies the true relationship, let's simulate a dataset with a **known linear relationship** between x and y. Run the code below to construct a dataset. 
+
+```{r OLS intuition 1} 
+# An example of a linear association
+set.seed(123)
+n <- 250
+x <- rnorm(n, mean = 0, sd = 1) # x is drawn from a standard normal distribution
+error <- rnorm(n, mean = 0, sd = 10) # the error term is drawn from a normal distribution with mean 0
+y <- 5 + 10 * x + error # y depends linearly on x, plus the noise
+data <- data.frame(x = x, y = y)
+
+# Visualising the association between x and y 
+library(ggplot2)
+
+ggplot(data, aes(x = x, y = y)) +
+  geom_point() +
+  labs(
+    title = "Association between x and y",
+    x = "Independent variable (x)",
+    y = "Dependent variable (y)"
+  ) +
+  
+  # Linear trend candidates
+  geom_abline(intercept = 10, slope = 5, linetype = "dashed", colour = "red") +
+  geom_abline(intercept = 10, slope = 15, linetype = "dashed", colour = "green") +
+  geom_abline(intercept = 5, slope = 10, linetype = "dashed", colour = "blue") +
+  
+  theme_minimal()
+
+```
+
+Do all of the dashed lines looks like reasonable fits? What procedure should we use to pick the best line?
+
+```
+
+Among the provided options, the blue and green dashed lines appear to be reasonable fits. However, based on visual inspection alone, we cannot determine which line provides the best linear fit.
+
+To select the best line, we should use the ordinary least squares (OLS) procedure, which chooses the line that minimizes the sum of squared vertical distances between the observed data points and the fitted line.
+
+```
+
+The univariate OLS model aims to minimize the **Residual Sum of Squares**, defined as the sum of the squared differences between the observed values of the dependent variable and the values predicted by the model:
+
+\[
+\text{RSS} = \sum_{i=1}^{n} \left( y_i - \beta_0 - \beta_1 x_i \right)^2
+\]
+
+By taking the first derivatives of the RSS with respect to the model parameters and setting them equal to zero, we can show that the values of \(\beta_0\) and \(\beta_1\) that minimize the RSS satisfy the following linear regression model:
+
+\[
+y = \beta_0 + \beta_1 x + \varepsilon
+\]
+
+In the univariate case, the OLS estimators for the slope coefficient and the intercept can be written as:
+
+\[
+\hat{\beta}_1 = \frac{\operatorname{Cov}(x, y)}{\operatorname{Var}(x)}.
+\]
+
+\[
+\hat{\beta}_0 = \bar{y} - \hat{\beta}_1 \bar{x}.
+\]
+
+Consider a manual function that calculates the **slope** and the **intercept** coefficients. Run the function for the simulated x and y. 
+
+```{r OLS intuition 2} 
+
+# Manual univariate ordinary least squares function
+ols_coefficients <- function(x, y) {
+  
+  # cov(x, y) and var(x) 
+  cov_x_y <-  mean((x - mean(x)) * (y - mean(y)))
+  var_x <- mean((x - mean(x))^2)
+
+  # slope coefficient
+  beta_1 <- cov_x_y / var_x
+  
+  # intercept coefficient
+  beta_0 <- mean(y) - beta_1 * mean(x)
+  
+  return(list(slope = beta_1, intercept = beta_0))
+}
+
+# Example usage for the simulated data
+ols_coefficients(x, y)
+
+```
+What is the interpretation of the slope? What is the interpretation of the intercept? Does the OLS model capture the known relationship between x and y? 
+
+**Hint:** recall that we simulated y as `y <- 5 + 10 * x + error`
+
+```
+
+The slope measures the expected change in y associated with a one-unit increase in x. Geometrically, it corresponds to the steepness (the tangent of the angle) of the fitted line. A 1 unit increase in x is associated with a 10.77 unit increase in y. 
+
+The intercept represents the expected value of y when x equals 0. Geometrically, it is the point where the fitted line crosses the y-axis. When x is 0, the value of y is 5.784. 
+
+The OLS model correctly captures the true known relationship between x and y, with slight deviations due to the by-design statistical noise. 
+
+```
+
+### Univariate OLS: applications
+
+Now that we explored the intuition behind the univariate OLS, let's see it in action. First, download the **Students' Social Media Addiction** dataset from GitHub. 
+
+```{r load data, message = FALSE, warning = FALSE, }
+
+library(readr)
+
+df <- read_csv(
+  "https://raw.githubusercontent.com/paul-rottger/aas-2026-public/refs/heads/main/week4/tutorial/week4_tutorial_sample.csv"
+)
+
+```
+
+Let's familiarize ourselves with the new dataset. 
+
+```{r data description, message = FALSE} 
+
+library(dplyr)
+library(tidyr)
+
+# A quick look at the variables
+head(df, 10)
+
+# Let's calculate summary statistics by country
+df %>%
+  group_by(Country) %>%
+  summarise(
+    participants = n_distinct(Student_ID), 
+    `social media usage` = round(mean(Avg_Daily_Usage_Hours), 2),
+    `social media addiction score` = round(mean(Addicted_Score), 2) 
+    ) %>%
+  arrange(desc(participants)) %>% 
+  slice_head(n = 10)
+
+```
+
+What research questions can we ask, given the data? What research questions can be analysed using a univariate OLS model? 
+
+```
+
+The dataset focuses on social media usage and social life outcomes. Using these data, we can study the association between social media usage patterns and outcomes such as sleep habits, mental health, and related measures. We can also examine how these relationships differ across countries, gender, age groups, and relationship status.
+
+Using a univariate OLS model, we can analyze the association between two variables at a time, that is, whether and how one variable is related to another, without yet controlling for additional factors.
+
+```
+
+#### Univariate OLS with continuous independent variables
+
+Select two continuous variables that might be associated. Specify which one is the **dependent variable** and which one is the **independent variable**.
+
+Calculate **OLS coefficients for a univariate regression model** for these two variables using the manual `ols_coefficients()` function.  
+
+```{r OLS application continuous 1} 
+
+# Manually calculated OLS coefficients
+ols_coefficients(y = df$Sleep_Hours_Per_Night, x = df$Avg_Daily_Usage_Hours)
+
+```
+
+What is the interpretation of the slope coefficient for your model? What is the interpretation of the intercept coefficient? Is the sign of the coefficient the one you expected? 
+
+```
+
+The slope coefficient of -0.71 indicates that a one unit increase in the average daily usage hours corresponds to a -0.71 unit decrease in the number of sleep hours per night. 
+
+The intercept of 10.35 means that a person with the average daily usage hours of zero is predicted to have 10.35 sleep hours per night. 
+
+The direction of the relationship is consistent with the hypothesis that the use of social media has a negative impact on sleep. However, we cannot yet draw conclusions about this without first quantifying the uncertainty in our slope estimate. 
+
+```
+
+For continuous variables, the fitted univariate OLS regression line with an intercept always passes through the point (x_bar, y_bar). 
+
+To see that, **visualise the relationship** between the variables you chose, fit a univariate regression model, and check whether the predicted value of y at x=x_bar is y_bar. 
+
+```{r OLS application continuous 2} 
+
+# Visualization
+library(ggplot2)
+
+x_bar <- mean(df$Avg_Daily_Usage_Hours)
+y_bar <- mean(df$Sleep_Hours_Per_Night)
+
+ggplot(df, aes(x = Avg_Daily_Usage_Hours, y = Sleep_Hours_Per_Night)) +
+  geom_point(alpha = 0.4) +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  annotate("point", x = x_bar, y = y_bar, color = "red", size = 3) +
+  labs(
+    x = "Average Daily Social Media Usage (hours)",
+    y = "Sleep Hours per Night",
+    title = "OLS Fit Passes Through (x̄, ȳ)"
+  )
+
+```
+
+#### Univariate OLS with binary independent variables
+
+Univariate OLS can also be implemented with **binary categorical predictors**. 
+
+In the dataset, we only have one binary categorical variable: `Gender`. What **continuous dependent variable** can be associated with gender? 
+
+```{r technical}
+# run this code once to recode Gender as a binary variable
+df$Gender <- ifelse(df$Gender == "Male", 0, 1)
+
+```
+
+Select a **continuous dependent variable** and regress this variable on `Gender` using the manual `ols_coefficients()` function. 
+
+```{r OLS application categorical 1} 
+
+# Manually calculated OLS coefficients
+ols_coefficients(y = df$Avg_Daily_Usage_Hours, x = df$Gender)
+
+```
+
+What is the interpretation of the slope coefficient for your model? What is the interpretation of the intercept coefficient? Is the sign of the coefficient the one you expected? 
+
+```
+
+The intercept of 4.83 indicates that a person with gender 0 (in our case, male) is predicted to have an average daily usage hours of 4.83. 
+
+The slope coefficient of 0.18 indicates that a unit increase in gender is associated with a 0.18 unit increase in average daily usage hours. In other words, a person with gender 1 (in our case, female) is predicted to have an average daily usage hours of 5.01. 
+
+```
+
+What type of **t-test** would give us the same result? 
+
+```
+A two-sample t-test is identical to a univariate OLS regression model with a continuous dependent variable and a binary independent variable. 
+
+````
+
+Implement the correct t-test and compare the outcome with the univariate OLS regression model. 
+
+**Hint:** recall that we can run a t-test with a `t.test()` function from the `stats()` package. 
+
+```{r OLS application categorical 2}
+# Two-sample t-test
+
+library(stats)
+
+t.test(Avg_Daily_Usage_Hours ~ Gender, data = df)
+
+# Manually calculated OLS coefficients
+ols_coefficients(y = df$Avg_Daily_Usage_Hours, x = df$Gender)
+
+```
+
+
+#### Hypothesis testing for OLS coefficients
+
+Unlike the simple measurements of correlation, regression modelling not only tells us the size of the association, but also measures its **statistical significance**. Before implementing hypothesis testing, however, let's go through a couple of important preliminary steps. 
+
+##### Standard errors and the uncertainty quantification
+
+In univariate regression models, standard errors for the estimated coefficients are calculated from the estimated variance of the error term and the amount of variation in the independent variable.
+
+Standard error of the slope coefficient
+\[
+\mathrm{SE}(\hat{\beta}_1)
+=
+\sqrt{
+\frac{\hat{\sigma}^2}{\sum_{i=1}^{n} (x_i - \bar{x})^2}
+}
+\]
+
+Standard error of the intercept coefficient
+\[
+\mathrm{SE}(\hat{\beta}_0)
+=
+\sqrt{
+\hat{\sigma}^2
+\left(
+\frac{1}{n}
++
+\frac{\bar{x}^2}{\sum_{i=1}^{n} (x_i - \bar{x})^2}
+\right)
+}
+\]
+
+```{r standard errors} 
+# # Manual univariate ordinary least squares function with standard errors
+ols_with_se <- function(x, y) {
+  
+  n <- length(y)
+  
+  # OLS coefficients
+  cov_x_y <- mean((x - mean(x)) * (y - mean(y)))
+  var_x   <- mean((x - mean(x))^2)
+  
+  beta_1 <- cov_x_y / var_x
+  beta_0 <- mean(y) - beta_1 * mean(x)
+  
+  # Fitted values and residuals
+  y_hat <- beta_0 + beta_1 * x
+  residuals <- y - y_hat
+  
+  # Residual variance (sigma^2)
+  sigma2_hat <- sum(residuals^2) / (n - 2)
+  
+  # Sum of squared deviations of x
+  Sxx <- sum((x - mean(x))^2)
+  
+  # Standard errors
+  se_beta_1 <- sqrt(sigma2_hat / Sxx)
+  se_beta_0 <- sqrt(sigma2_hat * (1 / n + mean(x)^2 / Sxx))
+  
+  return(list(
+    intercept = beta_0,
+    slope = beta_1,
+    se_intercept = se_beta_0,
+    se_slope = se_beta_1
+  ))
+}
+
+```
+
+Now that we have a **coefficient** and **standard errors**, we can quantify the uncertainty for our estimations. OLS coefficients are built from **averages of i.i.d. data**. This is why the **Central Limit Theorem** applies to univariate OLS coefficients.
+
+Consider the association between **social media usage** (the independent variable) and the **number of sleeping hours** (the dependent variable). 
+
+Calculate the value and the standard error for the slope coefficient of the independent variable on the dependent variable, using the `ols_with_se()` function. Then, calculate the **95% confidence intervals** for the true population coefficient. 
+
+Note that the critical values in linear regression come from the t-distribution with n-2 degrees of freedom. 
+
+**Hint:** recall the CIs formula we used in the previous tutorials for the true population mean. 
+
+```{r confidence intervals}
+
+# manual univariate OLS model with SE
+model_OLS_se <- ols_with_se(y = df$Sleep_Hours_Per_Night, x = df$Avg_Daily_Usage_Hours)
+
+degrees_of_freedom <- length(df$Sleep_Hours_Per_Night) - 2
+alpha <- 0.05
+t_crit <- qt(1 - alpha / 2, degrees_of_freedom)
+
+upper_CI <- model_OLS_se$slope + t_crit * model_OLS_se$se_slope
+lower_CI <- model_OLS_se$slope - t_crit * model_OLS_se$se_slope
+
+print(paste0("The 95% confidence interval for the true population coefficient is between ", round(lower_CI, 2), 
+               " and ", round(upper_CI, 2), "."))
+
+```
+
+What is the interpretation of the CIs for the slope coefficient? Do the estimated CIs include zero?
+
+```
+If we were to repeatedly draw samples from the population and compute a 95% confidence interval for the slope coefficient each time, then 95% of those intervals would contain the true population slope. In this case, the estimated 95% confidence interval ranges from −0.75 to −0.67
+
+Since zero is not included in this interval, we can reject the null hypothesis that the slope is equal to zero at the 5% significance level. We will see this more formally in the next subsection. 
+
+```
+
+##### Hypothesis testing and p-values
+
+Provided the **asymptotic normality** of the regression coefficients, we can use the t-test hypothesis testing to assess the significance of the OLS coefficients.
+
+Let's formulate the **null hypothesis** and the **alternative hypothesis** for the association between the `Sleep_Hours_Per_Night` and the `Avg_Daily_Usage_Hours` variables. 
+
+```
+
+H0: there is not association between the number of sleeping hours and the average daily usage of social media (beta_1 = 0)
+H1: there is an association between the number of sleeping hours and the average daily usage of social media (beta_1 != 0)
+
+```
+Run the command below to get the slope coefficient and the SE for the slope coefficient for the `Sleep_Hours_Per_Night` and the `Avg_Daily_Usage_Hours` variables. 
+
+Calculate the **t-value** for the difference between the slope coefficient under H0 and the estimated slope coefficient. Then, calculate the **p-value** based on the obtained t-value. 
+
+**Hint:** you can access model output by using `model_OLS_se$___`. 
+
+```{r hypothesis testing} 
+# manual univariate OLS model with SE
+model_OLS_se <- ols_with_se(y = df$Sleep_Hours_Per_Night, x = df$Avg_Daily_Usage_Hours)
+model_OLS_se
+
+# t-value 
+t_value_slope <- (model_OLS_se$slope - 0) / model_OLS_se$se_slope
+t_value_slope
+
+# p-value 
+degrees_of_freedom <- length(df$Avg_Daily_Usage_Hours) - 2
+p_value_slope <- 2 * pt(-abs(t_value_slope), degrees_of_freedom)
+
+p_value_slope
+
+```
+
+What is the interpretation of the t-statistic for the slope coefficient? What is the interpretation of the p-value? Is the coefficient significant at the 95% confidence level? 
+
+```
+
+The t-statistic measures how many standard errors the estimated slope coefficient is away from zero under the null hypothesis that the true slope equals zero. A t-statistic of −34.23 indicates that the estimated slope is 34.23 standard errors below zero.
+
+The p-value is the probability of observing a t-statistic at least as extreme as −34.23 if the true slope coefficient were zero. The extremely small p-value implies strong evidence against the null hypothesis.
+
+Since the p-value is far below 0.05, the slope coefficient is statistically significant at the 95% confidence level.
+
+```
+
+### Univariate OLS with Base R 
+
+Base R provides useful commands for regression modelling. Let's re-run the univaraite model for the `Sleep_Hours_Per_Night` and the `Avg_Daily_Usage_Hours` variables using the `lm()`. 
+
+Run `summary()` on the model output to see the estimated coefficients, standard errors, t-values, and p-values in one place. 
+
+```{r base R OLS}
+
+# Univariate OLS model 
+base_R_OLS <- lm(df$Sleep_Hours_Per_Night ~ df$Avg_Daily_Usage_Hours)
+summary(base_R_OLS)
+
+```
+
+What can we conclude about the association between sleeping time and the daily usage of social media? What are the limitations of the current model? 
+
+**Extra:** re-run univariate regression models for other variables that you found interesting. Can you find associations that are statistically significant? Is the sign and the size of the coefficients the one you would expect? 
+
+```
+
+Since the estimated regression coefficient is negative and statistically significant at conventional levels, we can reject the null hypothesis of no association between sleeping time and daily social media usage. The results indicate a negative relationship: higher social media use is associated with fewer hours of sleep. If supported by a plausible theoretical mechanism, these findings are consistent with the hypothesis that increased social media usage may reduce sleeping time.
+
+However, the current univariate model oversimplifies the relationship and omits important factors that may also influence sleep duration, such as age, work or study schedules, and mental health. As a result, the estimates may suffer from omitted variable bias. A more robust multivariate regression model would be needed to better assess the relationship between social media use and sleep.
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
