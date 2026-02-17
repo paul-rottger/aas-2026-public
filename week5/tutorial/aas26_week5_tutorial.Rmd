@@ -1,0 +1,570 @@
+---
+title: "Week 5 Tutorial"
+subtitle: "Applied Analytical Statistics 2025/26"
+author: "Paul Röttger and Mikhail Korneev"
+output:
+  html_document:
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+It this tutorial, we focus on the theory and the application of the **multivariate regression model**. The tutorial covers the interpretations of coefficients in multivariate models, hypothesis testing, model fit, and the OLS assumptions. For all questions regarding the materials, please contact Mikhail Korneev at mikhail.korneev@reuben.ox.ac.uk. 
+
+The applied component of this tutorial is based on a **2019 study by Przybylski and Weinstein**. The original article is available at: https://royalsocietypublishing.org/rsos/article/6/2/171474/94645/.
+
+In this tutorial, we work with a reduced version of the dataset, which is publicly available through the Open Science Framework (OSF): https://osf.io/rkw6z/. Regression results may differ from the reported figures in Przybylski and Weinstein (2019). 
+
+By the end of the tutorial, you will be able to:
+
+- Identify situations in which a **univariate model fails** to adequately address a research question.
+- **Apply multivariate models in R** to investigate social science research questions.
+- **Evaluate and interpret** the performance of multivariate models.
+
+
+### The limitations of a univariate approach
+
+As we saw in the previous tutorial, a univariate linear OLS model can effectively estimate a true, known relationship between x and y when that relationship is simple. Now, let us examine how the model performs when the relationship between x and y becomes more complex.
+
+Review the code below. What issue do we introduce by simulating y as a linear function of x, z, and k? Will a univariate model accurately recover the true relationship between x and y?
+
+```{r multivariate intuition 1} 
+
+# An example of a linear association with multiple predictors 
+set.seed(123)
+n <- 250
+x <- rnorm(n, mean = 0, sd = 1) 
+error <- rnorm(n, mean = 0, sd = 5) 
+
+# we add two new variables that are correlated with x
+z <- 0.6 * x + rnorm(n, 0, 1)   # positively correlated with x
+k <- -0.4 * x + rnorm(n, 0, 1)  # negatively correlated with x
+
+y <- 5 + 10 * x + 15 * z + 3.5 * k + error # y depends linearly on x, z, and k, plus the noise
+data <- data.frame(x = x, y = y, z = z, k = k)
+
+```
+
+```
+Provide your answer here. 
+
+```
+
+Similar to the univariate OLS model, the estimated coefficients in a multivariate OLS model are obtained by solving a least squares minimization problem. However, because we now work with a matrix of predictors rather than a single variable, the solution takes a matrix form:
+
+$$
+\hat{\beta} = (X'X)^{-1} X'y
+$$
+
+The standard errors of the coefficients are obtained as the square roots of the diagonal elements of the variance–covariance matrix:
+
+$$
+SE(\hat{\beta}_j) = \sqrt{\hat{\sigma}^2 \left[(X'X)^{-1}\right]_{jj}}
+$$
+
+The code below provides a manual multivariate OLS function. Check that you understand how the coefficients and the standard errors are calculated. 
+
+```{r multivariate intuition 2} 
+
+# Manual multivariate ordinary least squares function
+ols_multivariate <- function(X, y) {
+  
+  # Convert X to matrix
+  X <- as.matrix(X)
+  
+  # Add intercept column of 1s
+  X <- cbind(1, X)
+  
+  # OLS formula: (X'X)^(-1) X'y
+  beta_hat <- solve(t(X) %*% X) %*% t(X) %*% y
+  
+  # Residuals
+  e <- y - X %*% beta_hat
+  
+  # Sample size and number of parameters
+  n <- nrow(X)
+  k <- ncol(X)
+  
+  # Estimate of error variance
+  sigma2_hat <- as.numeric(t(e) %*% e) / (n - k)
+  
+  # Variance-covariance matrix of coefficients
+  var_beta <- sigma2_hat * solve(t(X) %*% X)
+  
+  # Standard errors
+  se_beta <- sqrt(diag(var_beta))
+  
+  return(list(
+    coefficients = beta_hat,
+    standard_errors = se_beta
+  ))
+}
+
+```
+
+To see the effect of the **Omitted Variable Bias (OVB)** in practice, estimate three regression models below using `ols_multivariate()`. 
+
+**Extra:** confirm the findings with `lm()`.  
+
+```{r multivariate intuition 3, warning=FALSE} 
+
+# Naive model 
+lm(y ~ x, data)
+
+# Model with two predictors
+X <- data.frame(x = x, z = z)
+ols_multivariate(X, y)
+
+# Model with three predictors
+X <- data.frame(x = x, z = z, k = k)
+ols_multivariate(X, y)
+
+# Extra: 
+# Provide your code here
+
+```
+
+Are the estimated coefficients for x stable across specifications? What happens when we add z and k to the model?
+
+```
+Provide your answer here. 
+
+```
+
+### Multivariate OLS in practice - Przybylski and Weinstein (2019)
+
+To illustrate the use of the **multivariate OLS regression** in practice, let's study an example of the **2019 publication by Andrew Przybylski (our Oxford Internet Institute colleague!) and Netta Weinstein**. 
+
+In the 2019 paper, Przybylski and Weinstein analyse the association between violent computer games and aggressive behavior among UK adolescents. We selected several key variables from the survey they conducted in the UK. Run the code below to download the dataset. 
+
+```{r load data, message = FALSE, warning = FALSE, }
+
+library(readr)
+
+df <- read_csv(
+  "https://raw.githubusercontent.com/paul-rottger/aas-2026-public/refs/heads/main/week5/tutorial/week5_tutorial_sample.csv"
+)
+
+```
+
+What are the observations in the dataset? What is the interpretation of the variables? 
+
+**Hint:** consult the original study to see how the authors derive the key variables. 
+
+```
+Provide your answer here. 
+
+```
+
+The authors aimed to explore the association between violent computer games and aggressive behaviour. Looking at the dataset, what was the dependent variable? What was the independent variable? 
+
+```
+Provide your answer here. 
+
+```
+
+In the paper, the authors assessed a common view that violent computer games are associated with higher aggressive behavior among adolescents. 
+
+- First, do you think there is an association between violent computer games and aggression? Estimate a **univariate model** that measures the relationship between these two variables. Does the model confirm your intution? 
+
+- Second, control for relevant confounders and estimate a **multivariate model**. Do the models produce similar or different results? If results change, what can be the explanation? Use `lm()` for both models. 
+
+**Hint:** use the `stargazer` package to compare models. 
+
+```{r multivariate in practice, warning = FALSE} 
+library(stargazer)
+
+# Univariate model
+# Type your solution here
+
+# Multivariate model (with controls)
+# Type your solution here
+
+# Displaying model outcomes
+#stargazer(OLS_1, OLS_2,
+#          type = "text",
+##          add.lines = list(
+#            c("Controls Included", "No", "Yes")
+#          ),
+#          column.labels = c("No Controls", "With Controls"),
+#          dep.var.labels = "Conduct Problems"
+#)
+
+```
+
+```
+Provide your answer here. 
+
+```
+
+What is the interpretation of the beta_1 coefficient for the independent variable for the univariate model? Is the coefficient significant? How is it different from the interpretation of the coefficient in the multivariate model? 
+
+```
+Provide your answer here. 
+
+```
+
+#### R-squared, adjusted R-squared, and the F-test
+
+When working with multiple predictors, it may be tempting to include as many control variables as possible. However, doing so can reduce precision and, in some cases, introduce bias (e.g., through overfitting or inappropriate controls). Notably, in the 2019 paper, Przybylski and Weinstein do not use all socio-demographic controls from their sample for their main model (Table 3). 
+
+To select appropriate predictors, researchers rely on **theoretical reasoning**, consider **model fit measures**, and use tools such as the **F-test** to evaluate whether additional variables meaningfully improve the model.
+
+##### Measures of model fit
+
+The **R-squared** measures how much of the variation in the dependent variable is explained by the variation in the vector of independent variables. Additional variables always increases standard R-squared, without necessarily improving the model. To adjust for this effect, we use the **adjusted R-squared**. 
+
+Run the code below to calculate the **R-squared** and the **adjusted R-squared** for the baseline model from Przybylski and Weinstein (2019). 
+
+What adjustments are made to calculate the **adjusted R-squared**? How are the adjustments related to degrees of freedom? 
+
+```{r R-squared 1}
+
+# Przybylski and Weinstein (2019) baseline model
+model <- lm(conduct_problems ~ game_violent_time + 
+             female + trait_physical + trait_verbal + trait_hostility + trait_anger
+             , df)
+
+ybar <- mean(df$conduct_problems)
+
+# SSR = regression sum of squares (explained)
+SSR <- sum( (fitted(model) - ybar)^2 )
+
+# RSS = residual sum of squares (unexplained)
+RSS <- sum( residuals(model)^2 )
+
+# TSS = total sum of squares
+TSS <- SSR + RSS
+
+# R-squared
+R2 <- SSR / TSS       # equivalently 1 - RSS/TSS
+R2
+
+# Adjusted R-squared
+n <- length(y)
+p <- length(coef(model)) - 1
+
+R2adj <- 1 - ( (RSS/(n - p - 1)) / (TSS/(n - 1)) )
+R2adj
+
+```
+
+```
+Provide your answer here. 
+
+```
+
+In the multivariate setting, it is always preferable to use the adjusted R-squared. Based on the model output, what is the interpretation of the adjusted R-squared? 
+
+```
+Provide your answer here. 
+
+```
+
+**R-squared** and the **adjusted R-squared** can help your refine your specification. Complete the code by specifying three models with different sets of controls. Which one of these provides the best fit? 
+
+```{r R-squared 2, warning = FALSE}
+
+# Univariate model
+#Type your code here 
+
+# Multivariate model (with controls for gender and race)
+#Type your code here
+
+# Multivariate model (with controls for personality traits)
+#Type your code here
+
+# Comparing model outcomes
+#stargazer(OLS_1, OLS_2, OLS_3,
+#          type = "text",
+##          add.lines = list(
+#            c("Controls Included", "No", "Yes", "Yes")
+#          ),
+#          column.labels = c("No Controls", "Gender and Race Controls", "Personality-Traits Controls"),
+#          dep.var.labels = "Conduct Problems"
+#)
+
+```
+
+```
+Provide your answer below. 
+
+```
+
+Try adding new controls to the `OLS_3` model. Does this improve the **adjusted R-squared**? Why? 
+
+```
+Provide your answer here. 
+
+```
+
+To assess the selection of the variable parametrically, we can use the **F-test** for the joint significance of the coefficients. The standard F-test assesses the following null hypothesis:
+
+$$
+H_0 : \beta_1 = \beta_2 = \cdots = \beta_p = 0
+$$
+
+Run the code below to conduct the F-test for the baseline model. How is the **F-statistic** calculated? What is the interpretation of the p-value?
+
+```{r F-test}
+# F-test for the baseline model 
+
+model <- lm(conduct_problems ~ game_violent_time + 
+             female + trait_physical + trait_verbal + trait_hostility + trait_anger
+             , df)
+
+# model parameters
+ybar <- mean(df$conduct_problems)
+n <- length(df$conduct_problems)
+p <- length(coef(model)) - 1
+
+# SSR = regression sum of squares (explained)
+SSR <- sum( (fitted(model) - ybar)^2 )
+
+# RSS = residual sum of squares (unexplained)
+RSS <- sum( residuals(model)^2 )
+  
+# mean squares
+MSR <- SSR / p
+MSE <- RSS / (n - p - 1)
+  
+# F statistic
+F_value <- MSR / MSE
+F_value
+  
+# p-value
+p_value <- 1 - pf(F_value, df1 = p, df2 = n - p - 1)
+p_value
+
+```
+
+```
+Provide your answer here. 
+
+```
+
+Return to the code we produced for `R-squared 2` chunk. What are the F-values for different specifications? Are coefficients jointly significant for all models? 
+
+```
+Provide your answer here. 
+
+```
+
+Try removing predictors with non-significant coefficients from specification `OLS_3`. What happens to the F-value? What does it tell us about the relationships between the variables? 
+
+```
+Provide your answer here. 
+
+```
+
+### OLS Assumptions - Przybylski and Weinstein (2019)
+
+As discussed in the lecture, the validity of the OLS findings depends on crucial assumptions about the data and the nature of the relationship between the variables.
+
+To evaluate the research design of Przybylski and Weinstein (2019) in greater depth, we need to assess whether their model satisfies the two main assumptions to obtain **unbiased estimates**: 
+
+- **Linearity**
+- **Exogneity** 
+
+We also need to evaluate whether the paper employs correct tests, given the assumptions for **correct standard errors**: 
+
+- **Homoscedacticity**
+- **Independence**
+- **No perfect multicollinearity** 
+- Normality of the error term (not important for large samples)
+
+#### Unbiased estimates
+
+First, let's focus on the sources of potential biases in the estimates.  
+
+##### Linearity
+
+Under the linearity assumption, the model captures the true **functional form** of the relationship between the variables.
+
+To see whether this assumption applies to the baseline model, we can **plot the residuals against the fitted values**.
+
+**Hint:** your can use the `plot()` function.
+
+```{r linearity 1}
+# Przybylski and Weinstein (2019) - baseline model (Table 3)
+model <- lm(conduct_problems ~ game_violent_time + 
+             female + trait_physical + trait_verbal + 
+             trait_hostility + trait_anger,
+             df)
+
+# plot the residuals against the fitted values
+# Type your code here
+
+```
+
+Is the relationship between y and X linear? 
+
+```         
+Provide your answer here. 
+
+```
+
+How do the authors address the issue of potential non-linearity?
+
+```
+Provide your answer here. 
+
+```
+
+Adjust the model equation to account for the identified issues and check whether the results are robust to **alternative functional form** specifications. 
+
+```{r linearity 2, warning=FALSE}
+# baseline model 
+model <- lm(conduct_problems ~ game_violent_time + 
+             female + trait_physical + trait_verbal + 
+             trait_hostility + trait_anger,
+             df)
+
+# fit the nonlinear model, following Przybylski and Weinstein (2019)
+# Type your code here
+
+```
+
+Does the alternative functional form affect the interpretation of the coefficient for violent game time? 
+
+```         
+Provide your answer here. 
+
+```
+
+##### Exogeneity
+
+The exogeneity assumption states that independent variables in a regression model are uncorrelated with the error term.
+
+Do you think this assumption is valid for the Przybylski and Weinstein (2019) study? What other factors might bias the results of the OLS model?
+
+```         
+Provide your answer here. 
+
+```
+
+#### Correct Standard Errors 
+
+For the next step, let's discuss the validity of **statistical inference**, focusing on the standard errors. 
+
+##### Homoscedasticity 
+
+Homoscedasticity requires that the variance of the residuals is **constant** across regressors X. 
+
+To verify this assumption, return to the plot of the residuals against the fitted values you created for the `linearity 1` exercise. Do the residuals have constant variance depending on X?
+
+```
+Provide your answer here. 
+
+```
+
+The homoscedasticity assumption is commonly violated. It is a standard practice to use adjust for heteroscadasticity and use **heteroscadastictity-robust standard errors**. 
+
+Re-estimate the baseline model with **heteroskedasticity-robust standard errors**. 
+
+**Hint:** Standard errors can be computed with the `vcovHS()` function from the `sandwich` package.
+
+```{r homoscedasticity, warning=FALSE} 
+library(sandwich)
+
+# the baseline model 
+model <- lm(conduct_problems ~ game_violent_time + 
+             female + trait_physical + trait_verbal + 
+             trait_hostility + trait_anger,
+             df)
+
+# Non-robust SEs (default OLS)
+#se_default <- 
+
+# Robust SEs (HC1)
+#se_hc1 <- 
+
+# Corresponding p-values
+#p_default <- 
+#p_hc1 <- 
+
+# Stargazer table
+#stargazer(model, model,
+#          se = list(se_default, se_hc1),
+#          p  = list(p_default, p_hc1),
+#          column.labels = c("OLS SE", "Robust SE (HC1)"),
+#          type = "text",
+#          digits = 3)
+
+```
+
+What happens with the standard errors when we account for heteroskedasticity?
+
+```
+Provide your answer here. 
+
+```
+
+##### Idependence
+
+OLS assumes that observations are **independently distributed**. Is this assumption valid for Przybylski and Weinstein (2019)? What might cause the observations to dependent on each other? How do the authors address these concerns?
+
+**Hint:** consult the original publication to see how the authors collect their data.
+
+```         
+Provide your answer here. 
+
+```
+
+##### Perfect multicollinearity
+
+Perfect multicollinearity occurs when one independent variable is an **exact linear combination** of one or more other independent variables. In such cases, the model cannot be estimated because the variance–covariance matrix becomes non-invertible. Even high (but imperfect) multicollinearity can reduce the precision of coefficient estimates by inflating their standard errors.
+
+To assess multicollinearity, compute the correlation coefficients among the independent variables. Are any of the correlations excessively high? If so, can these strong correlations be theoretically justified?
+
+**Hint:** use a heatmap to visualize the correlation matrix with `ggplot2`. 
+
+```{r multicollinearity}
+# subset observations where game_violent_time is not NA
+df_clean <- subset(df, !is.na(df$game_violent_time)) 
+
+# a correlation matrix and a heatmap for the key predictors
+# Provide your code here
+
+```         
+
+```
+Provide your answer here. 
+
+```
+
+##### Normality of errors (Not important for large samples)
+
+Under the classical assumptions, the error term is assumed to be approximately normally distributed. While this assumption is less important for large samples, we can still use data visualization to verify it. 
+
+Create a **Q–Q plot** for the baseline model. How closely do the residuals follow the reference line, and what does this imply about the normality assumption?
+
+```{r normality of errors}
+
+# Q-Q plot for the baseline model 
+# Type your code here
+
+```
+
+```         
+Provide your answer here. 
+
+```
+
+### Conclusion
+
+Przybylski and Weinstein (2019) conclude that their research finds no meaningful relationship between violent video games and aggression. Now that we explored the **results** of the baseline model and assessed whether it satisfies the assumptions to obtain **unbiased estimates** and **correct standard errors**, are you convinced by the findings? 
+
+In answering this question, consider the following key issues:
+
+- **Is the data valid** for answering the research question?   
+- Does the model potentially **violate any of the core OLS assumptions**?
+- What **improvements** to the research design or model specification could **strengthen the argument**?
+
+```
+
+Provide your answer here. 
+
+```
