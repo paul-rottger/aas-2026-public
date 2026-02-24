@@ -1,0 +1,512 @@
+---
+title: "Week 6 Tutorial"
+subtitle: "Applied Analytical Statistics 2025/26"
+author: "Paul Röttger and Mikhail Korneev"
+output:
+  html_document:
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This tutorial explores the use of **Logistic and Poisson regression models**. The tutorial covers the use of binary and count models, the interpretation of the coefficients,  predicted probabilities, and informational criteria. 
+
+For all questions regarding the materials, please contact Mikhail Korneev at mikhail.korneev@reuben.ox.ac.uk. 
+
+The applied component of this tutorial is based on the 2020 **European Social Survey (ESS)** publication. In the tutorial, we use a reduced dataset. The full version of the dataset, along with an online codebook, can be found at: https://ess.sikt.no/en/datafile/f37d014a-6958-42d4-b03b-17c29e481d3d. The dataset for the Poisson regression is simulated. 
+
+By the end of the tutorial, you will be able to:
+
+- Identify situations when the **linear regression model is not optimal**. 
+- Implement models with **binary and count outcomes** to investigate social science research questions.
+- Interpret **model predictions** using **link functions**. 
+
+
+### Binary outcomes - Logistic regression
+
+In the previous tutorials, we focused on **continuous outcomes**. However, as social scientists, we frequently work with **binary outcomes**. What are some of the examples of **binary outcomes** in your area of study? 
+
+```
+Provide your answer here. 
+
+```
+
+While linear models can be used to study binary outcomes, it has several substantial limitations. What are the key limitations of the linear approach when dealing with **binary outcomes**? 
+
+```
+Provide your answer here. 
+```
+
+#### Intuition and the MLE
+
+A common alternative to the linear approach is the **logistic regression**. Run the code below that plots the predictions for a binary outcome `y` with the linear and the logistic approach. 
+
+How does the logistic model address the limitations of the linear model? 
+
+```{r intuition}
+
+# OLS vs Logistic for binary outcome
+set.seed(123)
+n <- 200
+
+x <- rnorm(n, 0, 1)
+
+# True logistic data-generating process
+p <- plogis(-1 + 2*x)
+y <- rbinom(n, 1, p)
+
+library(ggplot2)
+
+ggplot(data.frame(x, y), aes(x = x, y = y)) +
+  geom_jitter(height = 0.05, width = 0, alpha = 0.5) +
+  
+  # OLS (linear probability model)
+  geom_smooth(method = "lm", se = FALSE, linetype = "dashed") +
+  
+  # Logistic regression (S-shaped)
+  geom_smooth(method = "glm",
+              method.args = list(family = "binomial"),
+              se = FALSE) +
+  
+  labs(title = "Linear (dashed) vs Logistic (solid)",
+       y = "Pr(Y = 1)") +
+  theme_minimal()
+
+```
+
+```
+Provide your answer here. 
+```
+
+In linear regression, we used OLS to select the optimal fit of the linear model. However, OLS may be inefficient when applied to logistic models, so we instead use **Maximum Likelihood Estimation (MLE)**.
+
+Unlike for the OLS, the MLE does not have a closed-form solution. MLE selects coefficients that **maximize the log-likelihood** of observing the outcome data by repeatedly adjusting coefficients to increase likelihood until convergence. 
+
+To build intuition for the MLE, consider a biased coin example. Define:
+
+Y = 1  if the coin shows heads
+Y = 0  if the coin shows tails
+
+Assume Y ~ Bernoulli(p), where: p = P(Y = 1) = probability of heads. 
+
+The Bernoulli probability mass function is:
+
+$$
+f(y; p) =
+\begin{cases}
+1 - p & \text{if } y = 0 \\
+p     & \text{if } y = 1
+\end{cases}
+$$
+
+The likelihood is given by: 
+
+$$
+L(p) = \prod_{i=1}^{n} p^{y_i}(1 - p)^{1 - y_i}
+$$
+
+Suppose we flip the coin once and observe: Y = 1. What value of p_hat maximizes the likelihood?
+
+```
+Provide your answer here. 
+
+```
+
+Now suppose we flip the coin 4 more times. In total (5 flips), we observe: 3 heads, 2 tails. 
+
+What value of p_hat maximizes the likelihood of observing 3 successes out of 5 trials?
+
+```
+Provide your answer here. 
+
+```
+
+Similar to the OLS, the MLE is essentially a solution to a maximization problem. Run the code below to plot likelihood values against the candidates for p_hat. 
+
+```{r MLE, warning=FALSE}
+
+# Data
+k <- 3
+n <- 5
+
+# Load library
+library(ggplot2)
+
+# Grid of p values
+data_visual <- data.frame(p = seq(0, 1, length.out = 1000))
+
+# Manually compute binomial coefficient
+# there are many mutually-exclusive ways to obtain 3 heads and two tails
+# this is why we compute the number of combinations 
+choose_nk <- choose(n, k)
+
+# Manual likelihood formula (multiplying by the binomial coefficient to account for mutually-exclusive combinations
+data_visual$likelihood <- choose_nk * (data_visual$p^k) * ((1 - data_visual$p)^(n - k)) 
+
+# MLE
+p_hat <- k / n
+L_hat <- dbinom(k, size = n, prob = p_hat)
+
+# Plot
+ggplot(data_visual, aes(x = p, y = likelihood)) +
+  geom_line(size = 1) +
+  geom_vline(xintercept = p_hat, linetype = "dashed", color = "red") +
+  geom_point(aes(x = p_hat, y = L_hat), color = "red", size = 3) +
+  annotate("text", x = p_hat, y = L_hat,
+           label = paste0("MLE p = ", round(p_hat, 3)),
+           hjust = -0.1, color = "red") +
+  labs(title = "Likelihood Function (5 flips, 3 heads)",
+       x = "p (probability of heads)",
+       y = "Likelihood L(p)") +
+  theme_minimal()
+
+```
+
+For the logistic regression, the MLE also identifies the values of the coefficients that maximize the likelihood of observing the outcome data. However, the math gets a little more complicated. 
+
+To simplify the optimization, we maximize the log-likelihood instead of the likelihood itself. In the logistic model, the predicted probability is given by the logistic function: 
+
+$$
+p_i = \frac{1}{1 + e^{-x_i \beta}}
+$$
+
+In the log of the odds form, we can write this as (this is called the **link function**): 
+
+$$
+\log\left(\frac{p_i}{1 - p_i}\right) = x_i \beta
+$$
+
+And the log likelihood (what we aim to maximize) is:
+
+$$
+\ell(\beta)
+\;=\;
+\log L(\beta)
+\;=\;
+\sum_{i=1}^n \big[\, y_i \log p_i + (1-y_i)\log(1-p_i)\,\big]
+\;=\;
+\sum_{i=1}^n \big[\, y_i X_i\beta - \log(1+e^{X_i\beta}) \,\big]
+$$
+
+#### logistic regression - the ESS10 
+
+A **logistic regression model** assumes a Bernoulli distribution for a binary outcome and models the log-odds of success as a linear function of predictors. The parameters are estimated by maximizing the Bernoulli log-likelihood using the MLE. 
+
+To illustrate the application of the logistic regression model, we use the **10th wave of the ESS** that includes multiple questions on social behavior, political views, values, etc. Run the code below to download the dataset. 
+
+```{r load data} 
+
+df <- read_csv(
+  "https://raw.githubusercontent.com/paul-rottger/aas-2026-public/refs/heads/main/week6/tutorial/week6_tutorial_sample.csv"
+)
+
+```
+
+**Note** that some of the variables were edited to simplify the analysis. Check the appendix for the tutorial to see how the variables were re-coded. 
+
+In the following exercises, we will examine the factors associated with the probability that a respondent attended a political protest demonstration in the last 12 months prior to the ESS10 survey.
+
+What is the name of the **outcome variable** in the dataset?
+What variables could serve as potential **predictors**?
+Which variables might be included as **control variables**?
+
+```
+Provide your answer here. 
+```
+
+##### Univariate logistic model
+
+To implement a logistic regression in R, we can use a generalized linear regression model `glm()` function. Select a variable that you think is likely to predict protest participation and display the results of a **univariate logistic model** with `summary()`.
+
+What do you observe? Does the outcome confirm your intuition? 
+
+```{r univariate logistic 1} 
+
+# univariate logistic model for the association between protest participation and internet use
+#logit_univ <- glm(
+#  protest_last12m ~ ____,
+#  data = df,
+#  family = binomial(link = "logit")     # specify the kind of the regression model
+
+```
+
+```
+Provide your answer here. 
+
+```
+
+What is the interpretation of the coefficient for the predictor you selected? Is the effect statistically significant? 
+
+```
+Provide your answer here. 
+
+```
+
+What is the marginal effect of the predictor at the mean probability of attending a protest? 
+
+```
+Provide your answer here. 
+
+```
+
+What is the expected probability of attending the protest for a person with an average internet use? Remember that the probability in a logistic model is given by: 
+
+$$
+P(Y=1∣X_i) = \frac{1}{1+\exp^{-(\beta_0+\beta_iX_i)}}
+$$
+
+```{r univariate logistic 2}
+
+# type your code here
+
+```
+
+```
+Provide your answer here. 
+```
+
+##### Multivariate logistic model
+
+While manual calculation is good for univariate models, for multivariate models we can use automatic procedures. Add controls to your **univariate specification** and re-run the model. 
+
+```{r multivariate logistic 1, warning=FALSE}
+library(stargazer)
+
+# type your code here
+#logit_multiv <- ____ 
+
+```
+
+Does the size of the coefficient change between the univariate and the multivaraite models? What may explain the difference? 
+
+```
+Provide your answer here. 
+
+```
+
+To avoid complex manual calculations, we can use `ggpredict` to estimate the probabilities of attending protests for all levels of internet use. Note that `ggpredict` will use average values for all other variables, unless specified. 
+```{r multivariate logistic 2} 
+library(ggeffects)
+
+# Prediction of protest attendance for all levels of internet use
+#prediction_2 <- ggpredict(
+#  logit_multiv,
+#  terms = c("internet_use [1,2,3,4,5]")
+#)
+
+#prediction_2
+
+```
+
+How does the estimated probability change between the minimum and the maximum value of your selected predictor? 
+
+```
+Provide your answer here. 
+
+```
+
+##### Interaction terms
+
+From the dataset, internet use seems to be positively associated with protest participation. There might, however, be theoretical reasons to suspect that the association is not constant across different groups. 
+
+What variables in our dataset might shape the association between internet use and protest participation? 
+
+```
+Provide your answer here. 
+```
+
+To verify our intuition, we can first use `ggpredict()` to see if the predicted probabilities for internet use groups differ for other variables. 
+
+Edit the code below to compare the predicted probabilities for extreme values. Does the association between internet use and protest participation change between groups?  
+
+```{r interaction term 1} 
+# multivariate logistic model 
+#logit_multiv <- ____
+
+# Prediction of protest attendance for extreme values of internet_use and trust_politicians
+#prediction_3 <- ggpredict(
+#  logit_multiv,
+#  terms = c("internet_use [1,5]", 
+#            "[interaction variable [min, max]]")                           # add a variable here
+#)
+
+#prediction_3
+
+```
+
+```
+Provide your answer here. 
+
+```
+
+In regression modelling, differences in the associations can be analysed with **interaction terms**. Edit the code below to test whether the difference you observed in the previous exercise is significant. 
+
+```{r interaction term 2, warning=FALSE} 
+# multivariate logistic model 
+#model_interaction <- glm(
+#  protest_last12m ~ 
+#    
+#    internet_use * [interaction variable] + 
+# ___)
+
+```
+
+What is the interpretation of the interaction term? Is it statistically significant? 
+
+```
+Provide your answer here. 
+
+```
+
+#### Information criteria 
+
+Similar to the multivariate OLS regression, in multivariate logistic models we face the problem of the selection of the optimal number of controls. 
+
+To assess the fit of the OLS model, we used R-squared and adjusted R-squared. For the MLE, we use alternative measures of model fit: the **likelihood ratio test**, the **Akaike Information Criterion (AIC)**, and the **Bayesian Information Criterion (BIC)**. 
+
+##### Likelihood ratio test 
+
+The **likelihood ratio test** assesses if the addition of new parameters significantly improves the model fit. Mathematically, it implements a Chi-Squared test for the log likelihood ratio. 
+
+Consider two models below: a restricted model (nested, fewer parameters) and a full model (more parameters). Add two new parameters to the full model and use the likelihood ratio test to check if this improves the model fit. 
+
+```{r likelihood ratio test} 
+
+# Full model 
+#model_full <- glm(
+#  protest_last12m ~ internet_use + age_group +
+#    ____ + ____,                                                     # add two new variables here
+#  data = df,
+#  family = binomial(link = "logit")
+#)
+
+# Subset to complete cases for all variables used in the full model
+#df_complete <- df[
+#  complete.cases(df[, c(
+#    "protest_last12m",
+#    "internet_use",
+#    "age_group",
+#    "____",                                                          # add new variable 1 here
+#    "____"                                                           # add new variable 2 here
+# )]),
+#]
+
+# Restricted model (using same data)
+#model_restricted <- glm(
+#  protest_last12m ~ internet_use + age_group,
+#  data = df_complete,
+#  family = binomial(link = "logit")
+#)
+
+
+# Likelihood ratio test
+#anova(model_restricted, model_full, test = "Chisq")
+
+```
+
+Interpret the results of the likelihood ratio test. Do the additional controls improve the model fit? 
+
+```
+Provide your answer here. 
+```
+
+##### AIC and BIC 
+
+Another way to assess model fit are the AIC and the BIC. 
+
+The choice of the metric depends on the goals of the analysis. AIC focuses on predictive accuracy , while BIC favors simpler models. 
+
+Calculate the AIC and the BIC for the restricted and the full models from the previous exercise. What is the interpretation of the AIC and the BIC for the two models? 
+
+```{r AIC and BIC}
+
+# Type you code here. 
+
+```
+
+```
+Provide your answer here. 
+
+```
+
+### Count outcomes - Poisson regression 
+
+**Count variables** are quantitative variables that record the number of times an event occurs within a defined unit of observation (such as time, space, or individuals). The key characteristics of count variables is that they are discrete and non-negative. 
+
+Because of these properties, OLS models may produce inappropriate or inefficient estimates, and MLE, typically via **Poisson** or negative binomial regression, is often preferred.
+
+To illustrate the application of the Poisson regression, we simulated a dataset that contains (fictional) protests and economic parameters. Run the code below to download the dataset. 
+
+```{r load data 2} 
+
+df_2 <- read_csv(
+  "https://raw.githubusercontent.com/paul-rottger/aas-2026-public/refs/heads/main/week6/tutorial/week6_tutorial_sample_2.csv"
+)
+
+```
+
+The probability of the protests is manually simulated as a poisson distribution: 
+
+$$
+P(numberprotests = k) = \frac{\lambda^k e^{-\lambda}}{k!}, \quad k = 0,1,2,\dots
+$$
+
+Where the expected count is: 
+
+$$
+\lambda_i = \exp\left(\beta_0 
++ \beta_1 \, inflation_i
++ \beta_2 \, growth_i
++ \beta_3 \, unemployment_i
+\right)
+$$
+
+To fit a poisson regression model, we can use the same `glm()` function we used previously, adjusting for the kind of the statistical model. 
+
+```{r poisson regression}
+
+model_poisson <- glm(protests ~ inflation + unemployment + growth + political_unrest, 
+             family = poisson(link = "log"), # adjust for the kind of the statistical model
+             data = df_2)
+
+# View results
+summary(model_poisson)
+
+```
+
+What is the interpretation of the coefficient for inflation? Is the coefficient statistically significant? 
+
+```
+Provide your answer here. 
+
+```
+
+Calculate the multiplicative change in the expected number of protest from a single unit increase in inflation and interpret the results.  
+
+```{r poisson interpretation} 
+
+# Type your code here. 
+
+```
+
+```
+Provide your answer here. 
+
+```
+
+What is the expected number of protests for average inflation, average unemployment, and average economic growth? 
+
+```{r poisson predictions} 
+
+# Type your code here. 
+
+```
+
+```
+Provide your answer here. 
+
+```
+
+
