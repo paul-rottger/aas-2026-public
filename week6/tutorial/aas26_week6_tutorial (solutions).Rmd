@@ -1,0 +1,649 @@
+---
+title: "Week 6 Tutorial"
+subtitle: "Applied Analytical Statistics 2025/26"
+author: "Paul Röttger and Mikhail Korneev"
+output:
+  html_document:
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This tutorial explores the use of **Logistic and Poisson regression models**. The tutorial covers the use of binary and count models, the interpretation of the coefficients,  predicted probabilities, and informational criteria. 
+
+For all questions regarding the materials, please contact Mikhail Korneev at mikhail.korneev@reuben.ox.ac.uk. 
+
+The applied component of this tutorial is based on the 2020 **European Social Survey (ESS)** publication. In the tutorial, we use a reduced dataset. The full version of the dataset, along with an online codebook, can be found at: https://ess.sikt.no/en/datafile/f37d014a-6958-42d4-b03b-17c29e481d3d. The dataset for the Poisson regression is simulated. 
+
+By the end of the tutorial, you will be able to:
+
+- Identify situations when the **linear regression model is not optimal**. 
+- Implement models with **binary and count outcomes** to investigate social science research questions.
+- Interpret **model predictions** using **link functions**. 
+
+
+### Binary outcomes - Logistic regression
+
+In the previous tutorials, we focused on **continuous outcomes**. However, as social scientists, we frequently work with **binary outcomes**. What are some of the examples of **binary outcomes** in your area of study? 
+
+```
+In the field of internet, media, and technology studies, some binary variables may include whether a person uses a certain platform, reposts misinformation, votes in elections, etc. 
+
+```
+
+While linear models can be used to study binary outcomes, it has several substantial limitations. What are the key limitations of the linear approach when dealing with **binary outcomes**? 
+
+```
+When dealing with binary outcomes, linear models may produce inadequate results because of the misspecification of the functional form and out-of-range predictions. 
+
+```
+
+#### Intuition and the MLE
+
+A common alternative to the linear approach is the **logistic regression**. Run the code below that plots the predictions for a binary outcome `y` with the linear and the logistic approach. 
+
+How does the logistic model address the limitations of the linear model? 
+
+```{r intuition}
+
+# OLS vs Logistic for binary outcome
+set.seed(123)
+n <- 200
+
+x <- rnorm(n, 0, 1)
+
+# True logistic data-generating process
+p <- plogis(-1 + 2*x)
+y <- rbinom(n, 1, p)
+
+library(ggplot2)
+
+ggplot(data.frame(x, y), aes(x = x, y = y)) +
+  geom_jitter(height = 0.05, width = 0, alpha = 0.5) +
+  
+  # OLS (linear probability model)
+  geom_smooth(method = "lm", se = FALSE, linetype = "dashed") +
+  
+  # Logistic regression (S-shaped)
+  geom_smooth(method = "glm",
+              method.args = list(family = "binomial"),
+              se = FALSE) +
+  
+  labs(title = "Linear (dashed) vs Logistic (solid)",
+       y = "Pr(Y = 1)") +
+  theme_minimal()
+
+```
+
+```
+The logistic regression approach addresses the problem of functional form misspecification by estimating a nonlinear, S-shaped probability model. This specification ensures that predicted values are constrained to lie between 0 and 1, making them valid probabilities and properly reflecting the binary nature of the outcome variable.  
+```
+
+In linear regression, we used OLS to select the optimal fit of the linear model. However, OLS may be inefficient when applied to logistic models, so we instead use **Maximum Likelihood Estimation (MLE)**.
+
+Unlike for the OLS, the MLE does not have a closed-form solution. MLE selects coefficients that **maximize the log-likelihood** of observing the outcome data by repeatedly adjusting coefficients to increase likelihood until convergence. 
+
+To build intuition for the MLE, consider a biased coin example. Define:
+
+Y = 1  if the coin shows heads
+Y = 0  if the coin shows tails
+
+Assume Y ~ Bernoulli(p), where: p = P(Y = 1) = probability of heads. 
+
+The Bernoulli probability mass function is:
+
+$$
+f(y; p) =
+\begin{cases}
+1 - p & \text{if } y = 0 \\
+p     & \text{if } y = 1
+\end{cases}
+$$
+
+The likelihood is given by: 
+
+$$
+L(p) = \prod_{i=1}^{n} p^{y_i}(1 - p)^{1 - y_i}
+$$
+
+Suppose we flip the coin once and observe: Y = 1. What value of p_hat maximizes the likelihood?
+
+```
+With one success out of one trial, the MLE is p_hat = 1/1 = 1. 
+
+```
+
+Now suppose we flip the coin 4 more times. In total (5 flips), we observe: 3 heads, 2 tails. 
+
+What value of p_hat maximizes the likelihood of observing 3 successes out of 5 trials?
+
+```
+For a Bernoulli model, the MLE is the sample proportion: p_hat = number of successes / number of trials. So, p_hat = 3 / 5 = 0.6
+
+```
+
+Similar to the OLS, the MLE is essentially a solution to a maximization problem. Run the code below to plot likelihood values against the candidates for p_hat. 
+
+```{r MLE, warning=FALSE}
+
+# Data
+k <- 3
+n <- 5
+
+# Load library
+library(ggplot2)
+
+# Grid of p values
+df <- data.frame(p = seq(0, 1, length.out = 1000))
+
+# Manually compute binomial coefficient
+# there are many mutually-exclusive ways to obtain 3 heads and two tails
+# this is why we compute the number of combinations 
+choose_nk <- choose(n, k)
+
+# Manual likelihood formula (multiplying by the binomial coefficient to account for mutually-exclusive combinations
+df$likelihood <- choose_nk * (df$p^k) * ((1 - df$p)^(n - k)) 
+
+# MLE
+p_hat <- k / n
+L_hat <- dbinom(k, size = n, prob = p_hat)
+
+# Plot
+ggplot(df, aes(x = p, y = likelihood)) +
+  geom_line(size = 1) +
+  geom_vline(xintercept = p_hat, linetype = "dashed", color = "red") +
+  geom_point(aes(x = p_hat, y = L_hat), color = "red", size = 3) +
+  annotate("text", x = p_hat, y = L_hat,
+           label = paste0("MLE p = ", round(p_hat, 3)),
+           hjust = -0.1, color = "red") +
+  labs(title = "Likelihood Function (5 flips, 3 heads)",
+       x = "p (probability of heads)",
+       y = "Likelihood L(p)") +
+  theme_minimal()
+
+```
+
+For the logistic regression, the MLE also identifies the values of the coefficients that maximize the likelihood of observing the outcome data. However, the math gets a little more complicated. 
+
+To simplify the optimization, we maximize the log-likelihood instead of the likelihood itself. In the logistic model, the predicted probability is given by the logistic function: 
+
+$$
+p_i = \frac{1}{1 + e^{-x_i \beta}}
+$$
+
+In the log of the odds form, we can write this as (this is called the **link function**): 
+
+$$
+\log\left(\frac{p_i}{1 - p_i}\right) = x_i \beta
+$$
+
+And the log likelihood (what we aim to maximize) is:
+
+$$
+\ell(\beta)
+\;=\;
+\log L(\beta)
+\;=\;
+\sum_{i=1}^n \big[\, y_i \log p_i + (1-y_i)\log(1-p_i)\,\big]
+\;=\;
+\sum_{i=1}^n \big[\, y_i X_i\beta - \log(1+e^{X_i\beta}) \,\big]
+$$
+
+#### logistic regression - the ESS10 
+
+A **logistic regression model** assumes a Bernoulli distribution for a binary outcome and models the log-odds of success as a linear function of predictors. The parameters are estimated by maximizing the Bernoulli log-likelihood using the MLE. 
+
+To illustrate the application of the logistic regression model, we use the **10th wave of the ESS** that includes multiple questions on social behavior, political views, values, etc. Run the code below to download the dataset. 
+
+```{r load data} 
+library(readr)
+
+df <- read_csv(
+  "https://raw.githubusercontent.com/paul-rottger/aas-2026-public/refs/heads/main/week6/tutorial/week6_tutorial_sample.csv"
+)
+```
+
+**Note** that some of the variables were edited to simplify the analysis. Check the appendix for the tutorial to see how the variables were re-coded. 
+
+In the following exercises, we will examine the factors associated with the probability that a respondent attended a political protest demonstration in the last 12 months prior to the ESS10 survey.
+
+What is the name of the **outcome variable** in the dataset?
+What variables could serve as potential **predictors**?
+Which variables might be included as **control variables**?
+
+```
+The outcome variable is protest_last12m that equals 1 when person participated in a protest and 0 otherwise.
+
+One of the potential predictors is internet_use that measures the extent of internet use between 1 ("Never") and 5 ("Every day"). 
+
+Some suitable control variables include female (1 if female), cntry (country of the respondent), education_years (numeric) and other variables that might affect both the participation in protest and internet use. 
+
+```
+
+##### Univariate logistic model
+
+To implement a logistic regression in R, we can use a generalized linear regression model `glm()` function. Select a variable that you think is likely to predict protest participation and display the results of a **univariate logistic model** with `summary()`.
+
+What do you observe? Does the outcome confirm your intuition? 
+
+```{r univariate logistic 1} 
+
+# univariate logistic model for the association between protest participation and internet use
+logit_univ <- glm(
+  protest_last12m ~ internet_use,
+  data = df,
+  family = binomial(link = "logit")
+)
+
+summary(logit_univ)
+
+```
+
+```
+The coefficient is positive, confirming the intuition that higher usage of internet may be associated with higher probability of attending a protest.  
+
+```
+
+What is the interpretation of the coefficient for the predictor you selected? Is the effect statistically significant? 
+
+```
+A one-unit increase in internet_use is associated with an increase of 0.28689 in the log-odds of the attending a protest. Since log-odds are the logarithm of the odds ratio, this means that a one-unit increase in internet_use multiplies the odds of attending a protest by exp(0.28689) ≈ 1.33. In other words, the odds of attending a protest increase by approximately 33% for each additional unit of internet_use.
+
+Note that we use a z-test rather than a t-test because logistic models are estimated by maximum likelihood. Under standard regularity conditions, maximum likelihood estimators are asymptotically normal, so inference is based on the normal (z) distribution rather than the t-distribution used in OLS inference.
+
+```
+
+What is the marginal effect of the predictor at the mean probability of attending a protest? 
+
+```
+The mean probability of attending a protest is 6.4%. Hence, at mean probability, a one-unit increase in internet_use increases the probability of attending a protest by about 1.7 percentage points. This can be computed as Marginal Effect = beta * p * (1-p) = 0.28689 * 0.064 * (1−0.064) = 0.01719. 
+
+```
+
+What is the expected probability of attending the protest for a person with an average internet use? Remember that the probability in a logistic model is given by: 
+
+$$
+P(Y=1∣X_i) = \frac{1}{1+\exp^{-(\beta_0+\beta_iX_i)}}
+$$
+```{r univariate logistic 2}
+
+# define intercept and slope parameters
+b0 <-  logit_univ$coefficients["(Intercept)"]
+b1 <- logit_univ$coefficients["internet_use"]
+
+# substitute the coefficients into the baseline equation 
+eq_logit <- b0 + (b1 * mean(df$internet_use, na.rm = T))
+
+# substitute the equation with the coefficients into the logistic equation
+prediction_logit_univ <- 1 / (1 + exp(-eq_logit))
+
+prediction_logit_univ
+
+```
+
+```
+For a respondent with an average use of internet, the exected probability of attending a protest is approximtely 6%. 
+
+```
+
+##### Multivariate logistic model
+
+While manual calculation is good for univariate models, for multivariate models we can use automatic procedures. Add controls to your **univariate specification** and re-run the model. 
+
+```{r multivariate logistic 1, warning=FALSE}
+library(stargazer)
+
+logit_multiv <- glm(
+  protest_last12m ~ 
+    internet_use + 
+    cntry + 
+    age_group + 
+    partnered +
+    education_years + 
+    income_decile +
+    happiness +
+    religious + 
+    ethnic_majority +
+    trust_politicians +
+    political_interest +
+    left_right + 
+    internet_access + 
+    female,
+  data = df,
+  family = binomial(link = "logit")
+)
+
+stargazer(logit_univ, logit_multiv, 
+          type = "text", 
+          keep = c("internet_use"), 
+          add.lines = list(c("Controls", "No", "Yes"))
+          )
+
+```
+
+Does the size of the coefficient change between the univariate and the multivaraite models? What may explain the difference? 
+
+```
+In the multivariate model, the coefficient for internet_use is smaller than in the univariate logistic model. A one-unit increase in internet use is associated with a 0.138 increase in the log-odds of attending a protest, holding all other variables constant.
+
+This difference likely reflects omitted variable bias in the univariate model. When relevant control variables are excluded, the estimated coefficient for internet use may capture not only its direct association but also the indirect association via other correlated factors. Once these controls are included in the multivariate specification, the estimated coefficient becomes smaller and more accurately reflects the partial association of internet use.
+
+```
+
+To avoid complex manual calculations, we can use `ggpredict` to estimate the probabilities of attending protests for all levels of internet use. Note that `ggpredict` will use average values for all other variables, unless specified. 
+```{r multivariate logistic 2} 
+library(ggeffects)
+
+# Prediction of protest attendance for all levels of internet use
+prediction_2 <- ggpredict(
+  logit_multiv,
+  terms = c("internet_use [1,2,3,4,5]")
+)
+
+prediction_2
+
+```
+
+How does the estimated probability change between the minimum and the maximum value of your selected predictor? 
+
+```
+For people who never use internet (1), the probability of attending a protest is 3-6%. For people who use internet every day (5), the probability increasese to about 5% and 8%. 
+
+Importantly, the relationship is not linear, the change in predicted probability between different levels of internet use is not constant. In a logistic model, the association between internet use and the probability of attending a protest depends on the baseline probability, resulting in varying marginal effects across levels of internet use.  
+
+```
+
+##### Interaction terms
+
+From the dataset, internet use seems to be positively associated with protest participation. There might, however, be theoretical reasons to suspect that the association is not constant across different groups. 
+
+What variables in our dataset might shape the association between internet use and protest participation? 
+
+```
+The association between internet use and protest participation can be influenced by interest in politics, political views on the left-right spectrum, and the sociodemographic characteristics  
+
+```
+
+To verify our intuition, we can first use `ggpredict()` to see if the predicted probabilities for internet use groups differ for other variables. 
+
+Edit the code below to compare the predicted probabilities for extreme values. Does the association between internet use and protest participation change between groups?  
+
+```{r interaction term 1} 
+# multivariate logistic model 
+model <- glm(
+  protest_last12m ~ 
+    internet_use + 
+    cntry + 
+    age_group + 
+    partnered +
+    education_years + 
+    income_decile +
+    happiness +
+    religious + 
+    ethnic_majority +
+    trust_politicians +
+    political_interest +
+    left_right + 
+    internet_access + 
+    female,
+  data = df,
+  family = binomial(link = "logit")
+)
+
+# Prediction of protest attendance for extreme values of internet_use and trust_politicians
+prediction_3 <- ggpredict(
+  model,
+  terms = c("internet_use [1,5]", 
+            "trust_politicians[0, 10]")
+)
+
+prediction_3
+
+```
+
+```
+For individuals with very low trust in politicians (0), the predicted probability of attending a protest is approximately 3–7% for those who never use the internet (1). This probability increases to about 7–10% for respondents who use the internet every day (5).
+
+For individuals with very high trust in politicians (10), the predicted probability of attending a protest is lower overall. Among low internet users (1), the probability is around 2–4%, while among more frequent internet users (5), it increases to roughly 3–6%.
+
+Although the change in predicted probabilities (not the confidence intervals) appears larger for individuals with low trust in politicians, a formal statistical test of the interaction effect is necessary to determine whether this difference is statistically significant.
+
+```
+
+In regression modelling, differences in the associations can be analysed with **interaction terms**. Edit the code below to test whether the difference you observed in the previous exercise is significant. 
+
+```{r interaction term 2, warning=FALSE} 
+# multivariate logistic model 
+model_interaction <- glm(
+  protest_last12m ~ 
+    
+    internet_use * trust_politicians + 
+    
+    cntry + 
+    age_group + 
+    partnered +
+    education_years + 
+    income_decile +
+    happiness +
+    religious + 
+    ethnic_majority +
+    political_interest +
+    left_right + 
+    internet_access + 
+    female,
+  data = df,
+  family = binomial(link = "logit")
+)
+
+stargazer(logit_multiv, model_interaction,  
+          type = "text", 
+          keep = c("internet_use", 
+                   "trust_politicians", 
+                   "internet_use:trust_politicians"), 
+          add.lines = list(c("Controls", "Yes", "Yes"))
+          )
+
+```
+
+What is the interpretation of the interaction term? Is it statistically significant? 
+
+```
+For each one-unit increase in trust in politicians, the effect of internet use on the log-odds of attending a protest decreases by 0.034.
+
+In other words, internet use has a stronger mobilizing effect among individuals who have low political trust. Among individuals with high trust in politicians, the impact of internet use on protest participation is smaller.
+
+The effect is statistically significant at the 5% level. 
+
+```
+
+#### Information criteria 
+
+Similar to the multivariate OLS regression, in multivariate logistic models we face the problem of the selection of the optimal number of controls. 
+
+To assess the fit of the OLS model, we used R-squared and adjusted R-squared. For the MLE, we use alternative measures of model fit: the **likelihood ratio test**, the **Akaike Information Criterion (AIC)**, and the **Bayesian Information Criterion (BIC)**. 
+
+##### Likelihood ratio test 
+
+The **likelihood ratio test** assesses if the addition of new parameters significantly improves the model fit. Mathematically, it implements a Chi-Squared test for the log likelihood ratio. 
+
+Consider two models below: a restricted model (nested, fewer parameters) and a full model (more parameters). Add new parameters to the full model and use the likelihood ratio test to check if this improves the model fit. 
+
+```{r likelihood ratio test} 
+
+# Full model 
+model_full <- glm(
+  protest_last12m ~ internet_use + age_group +
+    education_years + female,
+  data = df,
+  family = binomial(link = "logit")
+)
+
+# Subset to complete cases for all variables used in the full model
+df_complete <- df[
+  complete.cases(df[, c(
+    "protest_last12m",
+    "internet_use",
+    "age_group",
+    "education_years",
+    "female"
+  )]),
+]
+
+# Restricted model (using same data)
+model_restricted <- glm(
+  protest_last12m ~ internet_use + age_group,
+  data = df_complete,
+  family = binomial(link = "logit")
+)
+
+
+# Likelihood ratio test
+anova(model_restricted, model_full, test = "Chisq")
+
+```
+
+Interpret the results of the likelihood ratio test. Do the additional controls improve the model fit? 
+
+```
+The likelihood ratio test evaluates the null hypothesis that the additional variables (education_years and female) jointly have no effect (i.e., their coefficients are equal to zero).
+
+Because the p-value is far below conventional significance levels, we reject the null hypothesis. This means that the additional controls significantly improve the model fit.
+
+In substantive terms, adding education and gender provides statistically meaningful explanatory power beyond internet use and age group. Therefore, the additional controls do improve the model fit. 
+
+```
+
+##### AIC and BIC 
+
+Another way to assess model fit are the AIC and the BIC. 
+
+The choice of the metric depends on the goals of the analysis. AIC focuses on predictive accuracy , while BIC favors simpler models. 
+
+Calculate the AIC and the BIC for the restricted and the full models from the previous exercise. What is the interpretation of the AIC and the BIC for the two models? 
+
+```{r AIC and BIC}
+
+# 1. Manual calculation for the restricted model 
+# Log-likelihood
+ll <- logLik(model_restricted)
+
+# Number of parameters
+k <- attr(ll, "df")
+# Sample size
+n <- nobs(model_restricted)
+
+# AIC
+AIC_restricted <- -2 * as.numeric(ll) + 2 * k
+# BIC
+BIC_restricted <- -2 * as.numeric(ll) + k * log(n)
+
+# 2. Automatic calculation for the full model 
+
+AIC_full <- AIC(model_full)
+BIC_full <- BIC(model_full)
+
+# 3. Comparison
+
+AIC_dif <- AIC_full - AIC_restricted
+BIC_dif <- BIC_full - BIC_restricted
+
+AIC_dif
+BIC_dif
+
+```
+
+```
+The AIC for the full model is substantially smaller than for the restricted model. Therefore, the full model is preferred. Analogously, the BIC favors the full model. As a general rule of thumb, an absolute difference in AIC or BIC greater than 10 is considered very strong evidence in favor of the model with the lower value.
+
+```
+
+### Count outcomes - Poisson regression 
+
+**Count variables** are quantitative variables that record the number of times an event occurs within a defined unit of observation (such as time, space, or individuals). The key characteristics of count variables is that they are discrete and non-negative. 
+
+Because of these properties, OLS models may produce inappropriate or inefficient estimates, and MLE, typically via **Poisson** or negative binomial regression, is often preferred.
+
+To illustrate the application of the Poisson regression, we simulated a dataset that contains (fictional) protests and economic parameters. Run the code below to download the dataset. 
+
+```{r load data 2} 
+
+df_2 <- read_csv(
+  "https://raw.githubusercontent.com/paul-rottger/aas-2026-public/refs/heads/main/week6/tutorial/week6_tutorial_sample_2.csv"
+)
+
+```
+
+The probability of the protests is manually simulated as a poisson distribution: 
+
+$$
+P(numberprotests = k) = \frac{\lambda^k e^{-\lambda}}{k!}, \quad k = 0,1,2,\dots
+$$
+
+Where: 
+
+$$
+\log(\lambda_i) =
+\beta_0 + \beta_1 \, inflation_i
++ \beta_2 \, growth_i
++ \beta_3 \, unemployment_i
+$$
+
+To fit a poisson regression model, we can use the same `glm()` function we used previously, adjusting for the kind of the statistical model. 
+
+```{r poisson regression}
+
+model_poisson <- glm(protests ~ inflation + unemployment + growth + political_unrest, 
+             family = poisson(link = "log"), # adjust for the kind of the statistical model
+             data = df_2)
+
+# View results
+summary(model_poisson)
+
+```
+
+What is the interpretation of the coefficient for inflation? Is the coefficient statistically significant? 
+
+```
+A one-unit increase in inflation is associated with a 0.149 increase in the log of the expected protest count, holding other variables constant. It is statistically significant at the 5% level. 
+
+```
+
+Calculate the multiplicative change in the expected number of protest from a single unit increase in inflation and interpret the results.  
+
+```{r poisson interpretation} 
+
+inflation_coef <- model_poisson$coefficients[2]
+
+multiplicative_change_inflation <- exp(inflation_coef)
+
+multiplicative_change_inflation
+
+```
+
+```
+A single unit increase in inflation is associated with with approximately a 16% increase in the expected number of protests, ceteris paribus.
+
+```
+
+What is the expected number of protests for average inflation, unemployment, and economic growth? 
+
+```{r poisson predictions} 
+
+# linear predictor at means
+eta <- model_poisson$coefficients[1] + model_poisson$coefficients[2] * mean(df_2$inflation) +
+  model_poisson$coefficients[3] * mean(df_2$unemployment) + model_poisson$coefficients[4] * mean(df_2$growth)
+
+eta
+# expected count
+exp(eta)
+
+```
+
+```
+At the sample means of the predictors, the model predicts about 0.86 protests per month 
+
+```
+
+
