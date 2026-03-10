@@ -1,0 +1,444 @@
+---
+title: "Week 8 Tutorial"
+subtitle: "Applied Analytical Statistics 2025/26"
+author: "Paul Röttger and Mikhail Korneev"
+output:
+  html_document:
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+In this tutorial, we explore practical applications of **panel data and fixed effects**, as well as issues related to **autocorrelation and time dependence**.
+
+We use data from the American Community Survey (ACS) covering the years 2014–2024. The full dataset is available at: https://data.census.gov/. For all questions regarding the tutorial materials, please contact Mikhail Korneev at mikhail.korneev@reuben.ox.ac.uk. 
+
+By the end of this tutorial, you will be able to:
+
+- Construct **panel datasets**
+- Estimate regression models with **fixed effects**
+- Detect and address **time dependence**
+- Model and correct for **autocorrelation** with AR(1)
+
+### Panel datasets and Fixed Effects
+
+#### Intuition: Simulated Data
+
+Panel datasets are defined by their structure. Consider a data simulation below that models the relationship between firms adopting a certain policy (e.g., diversity in hiring) and their profitability. 
+
+What makes it a panel dataset? 
+
+```{r panel data simulation, message=FALSE} 
+
+# Simulated panel dataset for firm profitability
+
+# Set seed for replication
+set.seed(123)
+
+# packages
+library(dplyr)
+
+# parameters
+N <- 100; T <- 20
+years <- 1:T
+shock_years <- c(5, 11, 17)
+shock_mags <- c(-0.25, -0.4, -0.3)
+
+# firm covariates
+firms <- tibble(
+  firm = paste0("F", 1:N),
+  region = sample(c("NA","EU","AS","OT"), N, replace = TRUE, prob = c(.4,.3,.2,.1)),
+  industry = sample(c("Software","Hardware","Services","Security"), N, replace = TRUE, prob = c(.5,.2,.2,.1)),
+  prod = rnorm(N),      # productivity 
+  gov  = rnorm(N),      # governance quality 
+  exp  = rnorm(N)       # founder experience
+)
+
+# firms adopt policy X with probability p 
+# p depends only on observed covariates (staggered adoption)
+firms <- firms %>%
+  mutate(p_adopt = plogis(0.4*gov + 0.3*prod - 0.2),
+         ever = rbinom(N, 1, p_adopt),
+         adopt_year = ifelse(ever == 1, sample(6:15, N, replace = TRUE), NA_integer_))
+
+# build panel
+panel <- expand.grid(firm = firms$firm, year = years, KEEP.OUT.ATTRS = FALSE) %>%
+  as_tibble() %>%
+  left_join(firms, by = "firm") %>%
+  mutate(policy = ifelse(!is.na(adopt_year) & year >= adopt_year, 1, 0))
+
+# one-year shocks (same for all firms in that year), outcome, factors
+panel <- panel %>%
+  mutate(
+    shock = case_when(
+      year == shock_years[1] ~ shock_mags[1],
+      year == shock_years[2] ~ shock_mags[2],
+      year == shock_years[3] ~ shock_mags[3],
+      TRUE ~ 0
+    ),
+    eps = rnorm(n(), 0, 0.2),
+    # firm fixed effect is exact linear function of observed covariates (no unobserved noise)
+    profitability = 1 + 0.5*prod + 0.3*gov + 0.2*exp + shock + 0.12*policy + eps,
+    yearf = factor(year),
+    firmf = factor(firm)
+  )
+
+```
+
+```
+Provide your answer here. 
+
+```
+
+In the simulated panel dataset, which variables vary over time but are common across firms? Which variables vary across firms but remain constant over time? 
+
+```
+Provide your answer here. 
+
+```
+When analyzing the relationship between policy adoption and profitability, which variables are confounders and why? 
+
+```
+Provide your answer here. 
+
+```
+
+The panel data structure allows us to control for confounders by controlling for time-invariant characteristics and unit-invariant effects. When some confounders are unobserved, two-way fixed effects (TWFE) model outperforms multivariate OLS by addressing the omitted variable bias.  
+
+To see this in practice, implement two **multivariate pooled OLS models** that measure the association between policy adoption and profitability: 
+
+- For model 1, control for **all confounders** but do not include the fixed effects. 
+- For model 2, assume that governance is unobserved and exclude it from the model. 
+
+
+```{r OLS, warning=FALSE, message = FALSE} 
+library(stargazer)
+library(sandwich)
+library(lmtest)
+
+# Multivariate pooled OLS with observed covariates 
+#model_OLS_1 <- ____
+
+# Multivariate pooled OLS, but governance is not observed 
+#model_OLS_2 <- ____
+
+# cluster-robust vcov
+#vcov_cluster_OLS_1 <- vcovCL(model_OLS_1, cluster = panel$firm)
+#vcov_cluster_OLS_2 <- ___
+
+# extract clustered SE for stargazer
+#se_cluster_OLS_1 <- sqrt(diag(vcov_cluster_OLS_1))
+#se_cluster_OLS_2 <- ____
+
+# display model output 
+# Type your code here 
+
+```
+
+What is the interpretation of the coefficient? Which model best captures the true known (by design) association between the policy and profitability and why? 
+
+```
+Provide your answer here. 
+
+```
+
+Pooled OLS with known confounders (model 1) uses within and between variation. What does this mean in practice? How is this reflected in our example? 
+
+```
+Provide your answer here. 
+
+```
+
+Now, implement a **two-way fixed effects model**. To do that, regress profitability on the policy, plus year and firm dummies. Do not include any other confounders. 
+
+Remember to **cluster standard errors** at firm level. 
+
+```{r TWFE model, warning=FALSE}
+
+# Two-way FE using dummy variables (equivalent to firm + year FE)
+# model_FE <- ___
+
+# cluster-robust vcov
+#vcov_cluster_FE <- ___
+
+# extract clustered SE for stargazer
+#se_cluster_FE <- ___
+
+# display model output 
+# Type your code here 
+
+```
+
+Compare the outcome of the three models. Do the coefficients differ? Why yes or why not? 
+
+```
+Provide your answer here. 
+
+```
+
+What (by-design) assumptions did we make about the simulated data? Would the results of the FE model be similar if these assumptions were violated? 
+
+```
+Provide your answer here. 
+
+```
+
+In our simulation, firms are observed over 20 years. In reality, what theoretical assumptions might be violated? 
+
+```
+Provide your answer here. 
+
+```
+
+#### Practice: ACS Database 
+
+To provide a practical example, we now focus on the ACS database that collects information on an extensive list of socio-economic characteristics of the US labour force. 
+
+We selected several variables for the tutorial to explore **economic determinants of self-employment**. Go ahead and download the data from GitHub.
+
+What makes this a **panel dataset**? What are the units of observation? Is this a balanced panel? State the number of units and time periods. 
+
+```{r ACS data} 
+library(readr)
+
+df_ACS <- read_csv(
+  "https://raw.githubusercontent.com/paul-rottger/aas-2026-public/refs/heads/main/week8/tutorial/week8_tutorial_sample.csv"
+)
+
+```
+
+```
+Provide your answer here. 
+
+```
+
+In our sample, what could be the **time-invariant** characteristics? What could be the **unit-invariant** characteristics? 
+
+```
+Provide your answer here. 
+
+```
+
+Self-employment trends differ between states in the US. Use ggplot to visualise self-employment for the five largest states: California, Texas, Florida, New York, and Pennsylvania.  
+
+What might be the story about the time trend? 
+
+```{r self-employment trend}
+library(ggplot2)
+
+# plot the trends
+# Type your code here
+
+```
+
+```
+Provide your answer here. 
+
+```
+
+What parameter may be associated with self-employment? Select one predictor and implement a two-way fixed effects model. 
+
+```{r TWFE ACS, warning=FALSE}
+
+# Type your code here
+
+```
+
+What is the interpretation of the coefficient? 
+
+```
+Provide your answer here. 
+
+```
+
+Note that the TWFE only captures entity- and time-invariant characteristics. If we have reasons to believe that some confounders are time-variant, leaving them out of the model may introduce the Omitted Variable Bias (OVB). 
+
+Improve the model by adding 1-2 controls that might be associated with both self-employment and your independent variable, and that vary across time. 
+
+```{r TWFE ACS with controls, warning=FALSE}
+
+# Type your code here
+
+```
+
+Does the size of the coefficient change? Why? 
+
+```
+Provide your answer here. 
+
+```
+
+What percentage of self-employment does the model predict for California in 2022 if your predictors are kept at national averages for that year? 
+
+```{r TWFE prediction} 
+
+# Type your code here
+
+```
+
+### Autocorrelation and Time Dependence
+
+Working with observations across multiple time periods might introduce a new problem: **autocorrelation**. 
+
+Returning to the simulated data and the ACS examples, do you think autocorrelation might be a concern? 
+
+```
+Provide your answer here. 
+
+```
+
+Diagnosing autocorrelation requires a sufficiently large sample (usually T > 50-100). For simplicity, we will therefore switch to a new example. 
+
+Run the code below to simulate a dataset on the association between economic growth and unemployment. 
+
+```{r data time series} 
+
+# Set seed for reproducibility
+set.seed(123)
+
+# time series
+T <- 120  # 10 years of monthly data
+dates <- seq.Date(from = as.Date("2015-01-01"),
+                  by = "month",
+                  length.out = T)
+
+# economic growth with autocorrelation 
+growth <- numeric(T)
+growth[1] <- rnorm(1, 0.2, 0.5)  # draws 1 value from N(0.2, 0.25)
+
+for (t in 2:T) {
+  growth[t] <- 0.6 * growth[t-1] + rnorm(1, 0, 0.4)
+}
+
+# unemployment as a function of economic growth and past unemployment
+unemployment <- numeric(T)
+unemployment[1] <- 6 + rnorm(1, 0, 0.3)
+
+for (t in 2:T) {
+  unemployment[t] <- 0.8 * unemployment[t-1] - 
+                     0.3 * growth[t] + 
+                     rnorm(1, 0, 0.2)
+}
+
+# dataframe
+df_ts <- tibble(
+  date = dates,
+  economic_growth = growth,
+  unemployment = unemployment
+)
+
+```
+
+#### Biased coefficients and SEs
+
+Autocorrelation occurs when the **error terms in a regression model are correlated across observations**. Among other factors, this can result from omitting time-varying variables and misspecifying functional form and dynamics.
+
+In our simulation, lagged coefficients are included in the output formula. This is typical for inert processes, such as macroeconomic trends. 
+
+By itself, omitting lagged coefficients produces **incorrect functional form** and leads to **biased estimates**. To see this, implement a naive OLS regression model that measures the association between economic growth and unemployment. 
+
+```{r naive OLS}
+
+# Type your code here
+
+```
+
+Does the model correctly capture the known association between unemployment and economic growth? 
+
+```
+Provide your answer here. 
+
+```
+
+More importantely for statistical inference, omitted lagged variables create *autocorrelation in the error term**. This **biases the standard errors**. Because autocorrelation is left out of the regression equation, OLS residuals are time-dependent. Plot residuals from the naive OLS model. 
+
+```{r naive OLS residuals}
+
+# Extract residuals from your model
+#df_ts$residuals <- resid("Your OLS Model")
+
+# Plot the residuals
+# Type your code here
+
+```
+
+#### Diagnosing Autocorrelation 
+
+To diagnose autocorrelation, we can use Autocorrelation Function (ACF) and Partial Autocorrelation Function (PACF) plots that measure correlation between a series and its lags, and formal tests. 
+
+First, use the ACF and the PACF to check for serial correlation in residuals. What is the interpretation of the plots? 
+
+**Hint:** use `acf()` and `pacf()` base R functions. 
+
+```{r ACF and PACF} 
+
+# Type your code here
+
+```
+
+```
+Provide your answer here. 
+
+```
+
+Alternatively, we can use the Durbin-Watson test for time dependence. Run the test and interpret the results.  
+
+**Hint:** use the `dwtest()` function from `lmtest`. 
+
+```{r DW}
+
+# Type your code here
+
+```
+
+```
+The p-valye of the Durbin-Watson test is below 0.05. We can therefore reject the null hypothesis that the true autocorrelation in the OLS model is 0. 
+
+```
+
+#### AR(1) Model 
+
+Time-series analysis is a complex field of econometrics and statistical inference. In practice, there is no single solution to autocorrelation, and the right model depends on the underlying assumptions about the data and the relationship. 
+
+For our example, a simple OLS with a lagged dependent variable will perform relatively well to get unbiased estimates. Because it uses a single lag of the dependent variable, this model is known as the **AR(1) model**.  
+
+Make a lag of the dependent variable and re-run the OLS specification. What is the interpretation of the coefficients? 
+
+```{r AR(1)} 
+
+# make lag
+#df_ts <- df_ts %>% arrange(date)
+#df_ts$unemp_lag1 <- ____
+#df_ts$economic_growth_lag1 <- ___
+
+# drop first obs
+# df_ar <- df_ts %>% filter(!is.na(unemp_lag1))
+
+# estimate
+# model_ar <- ___
+
+# For robust SEs 
+# coeftest(model_ar, vcov = NeweyWest(model_ar, lag = 4))
+
+```
+
+```
+Provide your answer here. 
+
+```
+
+Construct an ACF graph to check for autocorrelation in the residuals for the new model. What is the interpretation of the new ACF graph? 
+
+```{r ACF AR(1)}
+
+# Type your code here
+
+```
+
+```
+Provide your answer here. 
+
+```
+
